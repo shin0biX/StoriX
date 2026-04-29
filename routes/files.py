@@ -10,6 +10,15 @@ from starlette.responses import RedirectResponse
 import os,re
 import shutil
 from fastapi.responses import FileResponse
+from datetime import datetime,timezone,timedelta
+from jose import JWTError,jwt,ExpiredSignatureError
+
+
+
+SECRET_KEY = 'df6f0d0a3add6756944ce0cc1de56d756d8fb17b309d63704a3224aeb0e375f7'
+ALGORITHM = 'HS256'
+
+
 
 router = APIRouter(
     prefix='/files',
@@ -221,5 +230,73 @@ async def change_visibility(
     return {
         "is_public": file_model.is_public
     }
+    
+    
+    
+@router.post("/share/{file_id}")
+async def create_share_link(user:user_dependency,db:db_dependency,file_id:int , expires_minutes: int = 30):
+    
+    file = db.query(FileTable).filter(FileTable.id == file_id).first()
+
+    if not file:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    if file.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    expire = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)
+    
+    payload = {
+        'file_id' : file_id,
+        'type' : "share",
+        'exp' : expire
+    }
+    
+    token = jwt.encode(payload,SECRET_KEY,ALGORITHM)
+    
+    return {
+        "share_url": f"http://127.0.0.1:8000/files/shared/{token}",
+        "expires_at": expire
+    }
+    
+    
+
+@router.get("/shared/{token}")
+async def download_shared_file(token:str , db:db_dependency):
+    
+    try:
+        payload = jwt.decode(token,SECRET_KEY,ALGORITHM)
+        
+        if payload.get("type") != 'share':
+            raise HTTPException(status_code=400, detail="Invalid token")
+        
+        file_id = payload.get('file_id')
+        
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Link expired")
+
+    except jwt.JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    file = db.query(FileTable).filter(FileTable.id == file_id).first()
+    
+    if not file:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    if not os.path.exists(file.path):
+        raise HTTPException(status_code=404, detail="File missing")
+    
+    return FileResponse(
+        path = file.path,
+        filename = file.filename,
+        media_type="application/octet-stream"
+        
+    )
+    
+    
+        
+    
+    
+        
     
     
