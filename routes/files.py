@@ -1,15 +1,15 @@
 from fastapi import Depends,HTTPException,Path,APIRouter,Request,status,UploadFile,File
-from models import User,FileTable
+from models import User,FileTable,Plan
 from database import SessionLocal
 from typing import Annotated
 from sqlalchemy.orm import Session
 from starlette import status
 from pydantic import BaseModel
-from .auth import get_current_user
+from .auth import get_current_user , get_current_user_optional
 from starlette.responses import RedirectResponse
-import os
+import os,re
 import shutil
-
+from fastapi.responses import FileResponse
 
 router = APIRouter(
     prefix='/files',
@@ -25,17 +25,45 @@ def get_db():
 
 db_dependency = Annotated[Session,Depends(get_db)]
 user_dependency = Annotated[User, Depends(get_current_user)]
+user_dependency_optional = Annotated[User | None, Depends(get_current_user_optional)]
 
-class FileResponse(BaseModel):
+class FileResponses(BaseModel):
     id: int
     filename: str
     size: int
     path: str
+    is_public : bool
 
     class Config:
         from_attributes = True
 
 
+class VisibilityRequest(BaseModel):
+    choice: bool
+
+
+def get_safe_filename(original_name : str, folder:str) -> str:
+    
+    name = os.path.basename(original_name)
+    
+    name = name.replace(" " , "_")
+    
+    name = re.sub(r'[^a-zA-Z0-9._-]', '', name)
+    
+    if not name:
+        name = "file"
+
+    base,ext = os.path.splitext(name)
+    
+    counter =1
+    
+    final_name = name
+    
+    while(os.path.exists(os.path.join(folder, final_name))):
+        final_name = f"{base}({counter}){ext}"
+        counter +=1
+        
+    return final_name
 
 
 def redirect_to_login():
@@ -43,7 +71,7 @@ def redirect_to_login():
     redirect_response.delete_cookie(key='access_token')
     return redirect_response
 
-@router.get("/get-files", response_model=list[FileResponse])
+@router.get("/get-files", response_model=list[FileResponses])
 async def get_files(user:user_dependency,db:db_dependency):
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
@@ -66,7 +94,10 @@ async def upload_file(
     user_folder = os.path.join("storage", user.username)
     os.makedirs(user_folder, exist_ok=True)
 
-    file_path = os.path.join(user_folder, file.filename)
+    safe_name = get_safe_filename(file.filename,user_folder)
+    
+    
+    file_path = os.path.join(user_folder, safe_name)
 
     # save file
     with open(file_path, "wb") as buffer:
@@ -79,14 +110,14 @@ async def upload_file(
     if user_model is None:
         raise HTTPException(status_code=404, detail="user not found")
     
-    if user_model.used_storage + file_size > user_model.storage_limit:
+    if user_model.used_storage + file_size > user_model.plan.storage_limit:
         user_model
         raise HTTPException(status_code=400, detail="Storage limit exceeded")
     
     
     # create DB entry
     new_file = FileTable(
-        filename=file.filename,
+        filename=safe_name,
         size=file_size,
         path=file_path,
         user_id=user.id
@@ -132,4 +163,63 @@ async def delete_files(user:user_dependency,db:db_dependency, file_id:int):
         os.remove(file.path)
 
     return {"message": "File deleted successfully"}
+    
+    
+@router.get("/download/{file_id}")
+async def download_file(file_id:int, user:user_dependency_optional, db:db_dependency):
+    
+    file = db.query(FileTable).filter(FileTable.id == file_id).first()
+    
+    
+    if file is None:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    if not file.is_public:
+        if user is None:
+            raise HTTPException(status_code=401, detail="Login required")
+        if file.user_id != user.id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        
+    
+    if not os.path.exists(file.path):
+        raise HTTPException(status_code=404, detail="File missing on server")
+    
+    return FileResponse(
+        path = file.path,
+        filename= file.filename,
+        media_type="application/octet-stream"
+    )
+    
+@router.put("/{file_id}/visibility")
+async def change_visibility(
+    request: VisibilityRequest,
+    user: user_dependency,
+    db: db_dependency,
+    file_id: int,
+):
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    file_model = db.query(FileTable).filter(FileTable.id == file_id).first()
+
+    if file_model is None:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    if file_model.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    if request.choice and not user.plan.can_share:
+        raise HTTPException(
+            status_code=403,
+            detail="Your plan does not allow public sharing"
+        )
+
+    file_model.is_public = request.choice
+
+    db.commit()
+    db.refresh(file_model)
+    return {
+        "is_public": file_model.is_public
+    }
+    
     

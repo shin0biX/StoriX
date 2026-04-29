@@ -1,6 +1,6 @@
 from fastapi import APIRouter,Depends,HTTPException,Request
 from pydantic import BaseModel
-from models import User,FileTable
+from models import User,FileTable,Plan
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 from typing import Annotated
@@ -29,9 +29,15 @@ db_dependency = Annotated[Session,Depends(get_db)]
 
 bcrypt_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
 oauth2_bearer = OAuth2PasswordBearer(tokenUrl="auth/token")
+oauth2_bearer_optional = OAuth2PasswordBearer(
+    tokenUrl="auth/token",
+    auto_error=False   
+)
+
 
 SECRET_KEY = 'df6f0d0a3add6756944ce0cc1de56d756d8fb17b309d63704a3224aeb0e375f7'
 ALGORITHM = 'HS256'
+
 
 
 class CreateUserRequest(BaseModel):
@@ -39,12 +45,14 @@ class CreateUserRequest(BaseModel):
     email : str
     full_name : str
     password:str
+    plan_id :int
     
 def create_access_token(usesrname:str,user_id:int,expires_delta:timedelta, role:str):
     encode = {'sub' : usesrname, 'id': user_id , 'role':role}
     expires = datetime.now(timezone.utc) + expires_delta
     encode.update({'exp':expires})
     return jwt.encode(encode,SECRET_KEY,ALGORITHM)
+
 
 def authenticate_user(username:str , password:str ,db):
     user = db.query(User).filter(User.username==username).first()
@@ -53,6 +61,30 @@ def authenticate_user(username:str , password:str ,db):
     if not bcrypt_context.verify(password,user.hashed_password):
         return False
     return user
+
+
+async def get_current_user_optional(
+    token: Annotated[str | None, Depends(oauth2_bearer_optional)],
+    db: db_dependency
+) -> User | None:
+    
+    if token is None:
+        return None   # 👈 key difference
+
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get('id')
+
+        if user_id is None:
+            return None
+
+        user = db.query(User).filter(User.id == user_id).first()
+        return user
+
+    except JWTError:
+        return None
+
+
 
 async def get_current_user(token: Annotated[str, Depends(oauth2_bearer)], db:db_dependency) -> User:
     try:
@@ -72,15 +104,30 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_bearer)], db:db_
     
 
 @router.post("/")
-async def create_user(create_user_request:CreateUserRequest,db:db_dependency):
-    create_user_request = User(
-        email = create_user_request.email,
-        full_name = create_user_request.full_name,
-        username = create_user_request.username,
-        hashed_password = bcrypt_context.hash(create_user_request.password)
+async def create_user(create_user_request: CreateUserRequest, db: db_dependency):
+
+    plan_model = db.query(Plan).filter(Plan.id == create_user_request.plan_id).first()
+    if plan_model is None:
+        plan_model = db.query(Plan).filter(Plan.name == "Free").first()
+    if plan_model is None:
+        raise HTTPException(status_code=500, detail="Default plan not found")
+    
+    new_user = User(
+        email=create_user_request.email,
+        full_name=create_user_request.full_name,
+        username=create_user_request.username,
+        hashed_password=bcrypt_context.hash(create_user_request.password),
+        plan_id=plan_model.id
     )
-    db.add(create_user_request)
+
+    db.add(new_user)
     db.commit()
+    db.refresh(new_user)
+
+    return {
+        "message": "User created successfully",
+        "user_id": new_user.id
+    }
     
 @router.post("/token")
 async def login_for_access_token(form_data:Annotated[OAuth2PasswordRequestForm, Depends()],db:db_dependency):
@@ -97,3 +144,70 @@ async def login_for_access_token(form_data:Annotated[OAuth2PasswordRequestForm, 
     role=user.role
 )
     return {"access_token": token , "token_type": "bearer"}
+
+
+@router.get("/me")
+async def read_current_user(current_user: User = Depends(get_current_user)):
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "email": current_user.email,
+        "role": current_user.role,
+        "used_storage": current_user.used_storage,
+
+        "plan": {
+            "name": current_user.plan.name,
+            "storage_limit": current_user.plan.storage_limit
+        }
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# def seed_plans(db: Session):
+#     existing_plans = db.query(Plan).count()
+
+#     if existing_plans > 0:
+#         return  # plans already exist
+
+#     free_plan = Plan(
+#         name="Free",
+#         storage_limit=1024 * 1024 * 1024,   # 1GB
+#         max_file_size=1000*1024 * 1024,          # 1MB
+#         can_share=False
+#     )
+
+#     pro_plan = Plan(
+#         name="Pro",
+#         storage_limit=1024 * 1024 * 1024,  # 10GB
+#         max_file_size=1000 * 1024 * 1024,         # 1000MB
+#         can_share=True
+#     )
+
+#     premium_plan = Plan(
+#         name="Premium",
+#         storage_limit=1024 * 1024 * 1024,  # 100GB
+#         max_file_size=1000 * 1024 * 1024,         # 1000MB
+#         can_share=True
+#     )
+
+#     db.add_all([free_plan, pro_plan, premium_plan])
+#     db.commit()
+    
+# seed_plans(db=SessionLocal())
