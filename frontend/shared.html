@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Download Shared File - StoriX</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-family: 'Inter', sans-serif;
+        }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
+    <div class="glass-panel p-8 rounded-2xl shadow-2xl w-full max-w-md text-center">
+        <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500 mb-2">StoriX</h1>
+        <p class="text-slate-400 mb-8">Shared File Download</p>
+        
+        <div id="status-message" class="text-slate-300 mb-6">Preparing your download...</div>
+        
+        <button id="download-btn" class="hidden w-full bg-brand-600 hover:bg-brand-500 text-white font-semibold py-3 rounded-lg transition-colors">
+            Download File
+        </button>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const pathParts = window.location.pathname.split('/');
+            const token = pathParts[pathParts.length - 1] || new URLSearchParams(window.location.search).get('token');
+            const statusMsg = document.getElementById('status-message');
+            const downloadBtn = document.getElementById('download-btn');
+
+            if (!token) {
+                statusMsg.textContent = "Invalid or missing share token.";
+                statusMsg.classList.add('text-red-400');
+                return;
+            }
+
+            statusMsg.textContent = "Ready to download!";
+            downloadBtn.classList.remove('hidden');
+
+            downloadBtn.addEventListener('click', () => {
+                window.location.href = `/files/shared/${token}`;
+            });
+        });
+    </script>
+</body>
+</html>

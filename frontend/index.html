@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StoriX - Cloud Storage</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-family: 'Inter', sans-serif;
+        }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+    <div class="absolute inset-0 z-[-1] overflow-hidden">
+        <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-blue-600/20 blur-[100px]"></div>
+        <div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-purple-600/20 blur-[100px]"></div>
+    </div>
+
+    <div class="glass-panel p-8 rounded-2xl shadow-2xl w-full max-w-md transition-all duration-300 relative overflow-hidden" id="auth-container">
+        <!-- Login Form -->
+        <div id="login-form" class="space-y-6">
+            <div class="text-center">
+                <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">StoriX</h1>
+                <p class="text-slate-400 mt-2">Welcome back to your secure cloud</p>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-1">Username</label>
+                    <input type="text" id="login-username" class="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 text-white placeholder-slate-500" placeholder="Enter your username">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-1">Password</label>
+                    <input type="password" id="login-password" class="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 text-white placeholder-slate-500" placeholder="••••••••">
+                </div>
+                <div id="login-error" class="text-red-400 text-sm hidden"></div>
+                <button id="login-btn" class="w-full bg-brand-600 hover:bg-brand-500 text-white font-semibold py-2.5 rounded-lg transition-colors">Sign In</button>
+            </div>
+            <p class="text-center text-slate-400 text-sm">
+                Don't have an account? <a href="#" id="show-register" class="text-brand-400 hover:text-brand-300">Create one</a>
+            </p>
+        </div>
+
+        <!-- Register Form (Hidden by default) -->
+        <div id="register-form" class="space-y-6 hidden">
+            <div class="text-center">
+                <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">StoriX</h1>
+                <p class="text-slate-400 mt-2">Join and get your free storage</p>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-1">Full Name</label>
+                    <input type="text" id="reg-fullname" class="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 text-white placeholder-slate-500" placeholder="John Doe">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-1">Email</label>
+                    <input type="email" id="reg-email" class="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 text-white placeholder-slate-500" placeholder="john@example.com">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-1">Username</label>
+                    <input type="text" id="reg-username" class="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 text-white placeholder-slate-500" placeholder="johndoe">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-1">Password</label>
+                    <input type="password" id="reg-password" class="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 text-white placeholder-slate-500" placeholder="••••••••">
+                </div>
+                <div id="register-error" class="text-red-400 text-sm hidden"></div>
+                <div id="register-success" class="text-green-400 text-sm hidden">Registration successful! You can now sign in.</div>
+                <button id="register-btn" class="w-full bg-brand-600 hover:bg-brand-500 text-white font-semibold py-2.5 rounded-lg transition-colors">Sign Up</button>
+            </div>
+            <p class="text-center text-slate-400 text-sm">
+                Already have an account? <a href="#" id="show-login" class="text-brand-400 hover:text-brand-300">Sign in</a>
+            </p>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/auth.js"></script>
+</body>
+</html>

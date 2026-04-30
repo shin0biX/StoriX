@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - StoriX</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-family: 'Inter', sans-serif;
+        }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="min-h-screen p-4 md:p-8">
+    <div class="max-w-6xl mx-auto space-y-6">
+        <!-- Header -->
+        <header class="glass-panel rounded-2xl p-6 flex flex-col md:flex-row justify-between items-center gap-4 shadow-lg">
+            <div class="flex items-center gap-4">
+                <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">StoriX</h1>
+                <div class="h-8 w-px bg-slate-700"></div>
+                <div id="user-info" class="text-slate-300">Loading user...</div>
+            </div>
+            <div class="flex items-center gap-4">
+                <button id="plan-btn" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg border border-slate-700 transition-colors text-sm font-medium">Change Plan</button>
+                <button id="logout-btn" class="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg transition-colors text-sm font-medium">Logout</button>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <!-- Sidebar: Storage & Upload -->
+            <div class="md:col-span-1 space-y-6">
+                <div class="glass-panel p-6 rounded-2xl shadow-lg">
+                    <h2 class="text-lg font-semibold mb-4">Storage</h2>
+                    <div class="w-full bg-slate-800 rounded-full h-3 mb-2 overflow-hidden">
+                        <div id="storage-bar" class="bg-gradient-to-r from-blue-500 to-purple-500 h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                    <p id="storage-text" class="text-sm text-slate-400">0 MB / 0 MB</p>
+                </div>
+
+                <div class="glass-panel p-6 rounded-2xl shadow-lg">
+                    <h2 class="text-lg font-semibold mb-4">Upload File</h2>
+                    <div class="border-2 border-dashed border-slate-600 rounded-xl p-4 text-center hover:border-brand-500 transition-colors cursor-pointer relative" id="drop-zone">
+                        <p class="text-slate-400 text-sm mb-2">Drag & drop or click</p>
+                        <input type="file" id="file-input" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                    </div>
+                    <button id="upload-btn" class="w-full mt-4 bg-brand-600 hover:bg-brand-500 text-white font-medium py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Upload</button>
+                    <div id="upload-status" class="mt-2 text-sm text-center"></div>
+                </div>
+            </div>
+
+            <!-- Main: Files List -->
+            <div class="md:col-span-3">
+                <div class="glass-panel rounded-2xl shadow-lg p-6 min-h-[500px]">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-bold">Your Files</h2>
+                    </div>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="border-b border-slate-700/50">
+                                    <th class="py-3 px-4 font-semibold text-slate-300">Name</th>
+                                    <th class="py-3 px-4 font-semibold text-slate-300">Size</th>
+                                    <th class="py-3 px-4 font-semibold text-slate-300 text-center">Public</th>
+                                    <th class="py-3 px-4 font-semibold text-slate-300 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="files-list" class="divide-y divide-slate-700/50">
+                                <!-- Files injected here -->
+                                <tr><td colspan="4" class="text-center py-8 text-slate-500">Loading files...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Plan Modal -->
+    <div id="plan-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="glass-panel p-8 rounded-2xl w-full max-w-2xl relative">
+            <button id="close-plan-modal" class="absolute top-4 right-4 text-slate-400 hover:text-white">&times;</button>
+            <h2 class="text-2xl font-bold mb-6 text-center">Select a Plan</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- Free -->
+                <div class="bg-slate-800/80 p-6 rounded-xl border border-slate-700 text-center hover:border-brand-500 transition-colors">
+                    <h3 class="font-bold text-xl mb-2">Free</h3>
+                    <p class="text-slate-400 text-sm mb-4">1 GB Storage<br>No Sharing</p>
+                    <p class="text-2xl font-bold mb-4">$0<span class="text-sm text-slate-400">/mo</span></p>
+                    <button class="select-plan-btn w-full bg-slate-700 hover:bg-slate-600 py-2 rounded-lg" data-plan="Free">Select</button>
+                </div>
+                <!-- Pro -->
+                <div class="bg-slate-800/80 p-6 rounded-xl border border-brand-500 text-center relative shadow-[0_0_15px_rgba(59,130,246,0.3)]">
+                    <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-500 text-xs px-2 py-1 rounded-full">Popular</div>
+                    <h3 class="font-bold text-xl mb-2">Pro</h3>
+                    <p class="text-slate-400 text-sm mb-4">10 GB Storage<br>Public Sharing</p>
+                    <p class="text-2xl font-bold mb-4">$10<span class="text-sm text-slate-400">/mo</span></p>
+                    <button class="select-plan-btn w-full bg-brand-600 hover:bg-brand-500 py-2 rounded-lg" data-plan="Pro">Select</button>
+                </div>
+                <!-- Premium -->
+                <div class="bg-slate-800/80 p-6 rounded-xl border border-slate-700 text-center hover:border-brand-500 transition-colors">
+                    <h3 class="font-bold text-xl mb-2">Premium</h3>
+                    <p class="text-slate-400 text-sm mb-4">100 GB Storage<br>Public Sharing</p>
+                    <p class="text-2xl font-bold mb-4">$20<span class="text-sm text-slate-400">/mo</span></p>
+                    <button class="select-plan-btn w-full bg-slate-700 hover:bg-slate-600 py-2 rounded-lg" data-plan="Premium">Select</button>
+                </div>
+            </div>
+            <div id="plan-status" class="mt-4 text-center text-sm"></div>
+        </div>
+    </div>
+
+    <!-- Share Modal -->
+    <div id="share-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="glass-panel p-6 rounded-2xl w-full max-w-md relative">
+            <button id="close-share-modal" class="absolute top-4 right-4 text-slate-400 hover:text-white">&times;</button>
+            <h2 class="text-xl font-bold mb-4">Share Link</h2>
+            <p class="text-sm text-slate-400 mb-4">This link will expire in 30 minutes.</p>
+            <input type="text" id="share-link-input" readonly class="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2 text-sm text-slate-300 mb-4" />
+            <button id="copy-share-btn" class="w-full bg-brand-600 hover:bg-brand-500 py-2 rounded-lg font-medium transition-colors">Copy Link</button>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/dashboard.js"></script>
+</body>
+</html>
