@@ -147,20 +147,23 @@ async def login_for_access_token(form_data:Annotated[OAuth2PasswordRequestForm, 
 
 
 @router.get("/me")
-async def read_current_user(current_user: User = Depends(get_current_user)):
-    return {
-        "id": current_user.id,
-        "username": current_user.username,
-        "email": current_user.email,
-        "role": current_user.role,
-        "used_storage": current_user.used_storage,
+async def read_current_user(
+    db: db_dependency,
+    current_user: User = Depends(get_current_user)
+):
+    user = db.query(User).filter(User.id == current_user.id).first()
 
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "role": user.role,
+        "used_storage": user.used_storage,
         "plan": {
-            "name": current_user.plan.name,
-            "storage_limit": current_user.plan.storage_limit
+            "name": user.plan.name,
+            "storage_limit": user.plan.storage_limit
         }
     }
-
 
 
 
@@ -184,26 +187,28 @@ async def read_current_user(current_user: User = Depends(get_current_user)):
 #     existing_plans = db.query(Plan).count()
 
 #     if existing_plans > 0:
-#         return  # plans already exist
+#         return
+
+#     ONE_GB = 1024 * 1024 * 1024
 
 #     free_plan = Plan(
 #         name="Free",
-#         storage_limit=1024 * 1024 * 1024,   # 1GB
-#         max_file_size=1000*1024 * 1024,          # 1MB
+#         storage_limit=1 * ONE_GB,   # 1GB total storage
+#         max_file_size=ONE_GB,       # 1GB per file
 #         can_share=False
 #     )
 
 #     pro_plan = Plan(
 #         name="Pro",
-#         storage_limit=1024 * 1024 * 1024,  # 10GB
-#         max_file_size=1000 * 1024 * 1024,         # 1000MB
+#         storage_limit=10 * ONE_GB,  # 10GB total storage
+#         max_file_size=ONE_GB,
 #         can_share=True
 #     )
 
 #     premium_plan = Plan(
 #         name="Premium",
-#         storage_limit=1024 * 1024 * 1024,  # 100GB
-#         max_file_size=1000 * 1024 * 1024,         # 1000MB
+#         storage_limit=100 * ONE_GB,  # 100GB total storage
+#         max_file_size=ONE_GB,
 #         can_share=True
 #     )
 
