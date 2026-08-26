@@ -1,3 +1,28 @@
+📦 # StoriX
+
+A full-stack file storage and management platform built with FastAPI and React. StoriX allows users to securely manage files, track storage usage, share files, and access features based on their subscription plan.
+
+🌐 Live Demo: files.ujjawalcodes.site
+
+✨ Features
+🔐 User Authentication — Registration and login using JWT-based authentication
+📁 File Management — Upload, download, organize, and manage files
+📤 File Sharing — Share files publicly or keep them private
+💾 Storage Tracking — Monitor storage usage and enforce plan limits
+💳 Subscription Plans — Free, Pro, and Premium plans with different storage limits and features
+🛡️ Access Control — File ownership checks and plan-based permissions
+🔒 Password Security — Passwords are hashed using bcrypt
+📱 Responsive Interface — Designed to work across desktop and mobile devices
+🛠️ Tech Stack
+Area	Technologies
+Backend	FastAPI, Python, SQLAlchemy
+Frontend	React, Vite, CSS
+Database	SQLite
+Authentication	JWT, OAuth2, bcrypt
+File Storage	Local filesystem with database-backed metadata
+
+---
+
 ## 🏗️ How It Works
 
 StoriX separates authentication, file management, subscription plans, and persistent storage into dedicated parts of the application.
