@@ -131,7 +131,7 @@ async def create_user(create_user_request: CreateUserRequest, db: db_dependency)
     
 @router.post("/token")
 async def login_for_access_token(form_data:Annotated[OAuth2PasswordRequestForm, Depends()],db:db_dependency):
-    
+
     user = authenticate_user(
         form_data.username,form_data.password,db
     )
@@ -140,10 +140,23 @@ async def login_for_access_token(form_data:Annotated[OAuth2PasswordRequestForm, 
     token = create_access_token(
     usesrname=user.username,
     user_id=user.id,
-    expires_delta=timedelta(minutes=20),
+    expires_delta=timedelta(minutes=30),
     role=user.role
 )
     return {"access_token": token , "token_type": "bearer"}
+
+
+@router.post("/refresh")
+async def refresh_access_token(current_user: User = Depends(get_current_user)):
+    """Issue a fresh token for the caller. Lets the client renew sessions
+    without forcing a re-login while the current token is still valid."""
+    token = create_access_token(
+        usesrname=current_user.username,
+        user_id=current_user.id,
+        expires_delta=timedelta(minutes=30),
+        role=current_user.role
+    )
+    return {"access_token": token, "token_type": "bearer"}
 
 
 @router.get("/me")
@@ -157,11 +170,15 @@ async def read_current_user(
         "id": user.id,
         "username": user.username,
         "email": user.email,
+        "full_name": user.full_name,
         "role": user.role,
         "used_storage": user.used_storage,
         "plan": {
             "name": user.plan.name,
-            "storage_limit": user.plan.storage_limit
+            "storage_limit": user.plan.storage_limit,
+            "max_file_size": user.plan.max_file_size,
+            "can_share": user.plan.can_share,
+            "price": user.plan.price
         }
     }
 

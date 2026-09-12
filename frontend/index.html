@@ -1,103 +1,218 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>StoriX - Cloud Storage</title>
+    <title>StoriX — Your files. Secure. Accessible. Simple.</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
-            darkMode: 'class',
             theme: {
                 extend: {
                     colors: {
-                        brand: {
-                            500: '#3b82f6',
-                            600: '#2563eb',
-                        }
+                        bg: '#0d0d0f', surface: '#151518', elevated: '#1b1b20',
+                        ink: '#f5f5f5', mut: '#92929b', dim: '#5f5f6b',
+                        line: 'rgba(255,255,255,0.07)', lineS: 'rgba(255,255,255,0.13)',
+                        acc: '#34d399',
+                    },
+                    fontFamily: {
+                        ui: ['Inter', 'system-ui', 'sans-serif'],
+                        display: ['Space Grotesk', 'Inter', 'sans-serif'],
                     }
                 }
             }
         }
     </script>
-    <style>
-        body {
-            background-color: #0f172a;
-            color: #f8fafc;
-            font-family: 'Inter', sans-serif;
-        }
-        .glass-panel {
-            background: rgba(30, 41, 59, 0.7);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-    </style>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/app.css?v=3">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 </head>
-<body class="min-h-screen flex items-center justify-center p-4">
-    <div class="absolute inset-0 z-[-1] overflow-hidden">
-        <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-blue-600/20 blur-[100px]"></div>
-        <div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-purple-600/20 blur-[100px]"></div>
-    </div>
-
-    <div class="glass-panel p-8 rounded-2xl shadow-2xl w-full max-w-md transition-all duration-300 relative overflow-hidden" id="auth-container">
-        <!-- Login Form -->
-        <div id="login-form" class="space-y-6">
-            <div class="text-center">
-                <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">StoriX</h1>
-                <p class="text-slate-400 mt-2">Welcome back to your secure cloud</p>
+<body>
+    <!-- Header -->
+    <header class="sticky top-0 z-50 border-b border-line" style="background:rgba(13,13,15,.85);backdrop-filter:blur(8px)">
+        <div class="max-w-[1060px] mx-auto flex items-center justify-between h-[62px] px-6">
+            <a href="/" class="logo text-lg"><span class="logo-mark" id="logo-mark"></span>StoriX</a>
+            <nav class="hidden md:flex items-center gap-7 text-[13.5px] text-mut">
+                <a href="#features" class="hover:text-ink transition-colors">Features</a>
+                <a href="#plans" class="hover:text-ink transition-colors">Plans</a>
+                <a href="#how" class="hover:text-ink transition-colors">How it works</a>
+            </nav>
+            <div class="flex items-center gap-2.5">
+                <a href="/auth.html" class="btn btn-ghost btn-sm">Sign in</a>
+                <a href="/auth.html" class="btn btn-primary btn-sm cta-swap">Get started</a>
             </div>
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-1">Username</label>
-                    <input type="text" id="login-username" class="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 text-white placeholder-slate-500" placeholder="Enter your username">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-1">Password</label>
-                    <input type="password" id="login-password" class="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 text-white placeholder-slate-500" placeholder="••••••••">
-                </div>
-                <div id="login-error" class="text-red-400 text-sm hidden"></div>
-                <button id="login-btn" class="w-full bg-brand-600 hover:bg-brand-500 text-white font-semibold py-2.5 rounded-lg transition-colors">Sign In</button>
-            </div>
-            <p class="text-center text-slate-400 text-sm">
-                Don't have an account? <a href="#" id="show-register" class="text-brand-400 hover:text-brand-300">Create one</a>
-            </p>
         </div>
+    </header>
 
-        <!-- Register Form (Hidden by default) -->
-        <div id="register-form" class="space-y-6 hidden">
-            <div class="text-center">
-                <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">StoriX</h1>
-                <p class="text-slate-400 mt-2">Join and get your free storage</p>
-            </div>
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-1">Full Name</label>
-                    <input type="text" id="reg-fullname" class="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 text-white placeholder-slate-500" placeholder="John Doe">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-1">Email</label>
-                    <input type="email" id="reg-email" class="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 text-white placeholder-slate-500" placeholder="john@example.com">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-1">Username</label>
-                    <input type="text" id="reg-username" class="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 text-white placeholder-slate-500" placeholder="johndoe">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-1">Password</label>
-                    <input type="password" id="reg-password" class="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 text-white placeholder-slate-500" placeholder="••••••••">
-                </div>
-                <div id="register-error" class="text-red-400 text-sm hidden"></div>
-                <div id="register-success" class="text-green-400 text-sm hidden">Registration successful! You can now sign in.</div>
-                <button id="register-btn" class="w-full bg-brand-600 hover:bg-brand-500 text-white font-semibold py-2.5 rounded-lg transition-colors">Sign Up</button>
-            </div>
-            <p class="text-center text-slate-400 text-sm">
-                Already have an account? <a href="#" id="show-login" class="text-brand-400 hover:text-brand-300">Sign in</a>
-            </p>
+    <!-- Hero -->
+    <section class="landing-section text-center pt-20 pb-0">
+        <span class="eyebrow" id="eyebrow-icon">Personal cloud storage</span>
+        <h1 class="hero-title">Your files.<br><span style="color:var(--text-2)">Secure. Accessible.</span><br>Simple.</h1>
+        <p class="hero-sub">Upload, organize, and share your files from one clean workspace. Storage tracking, plan limits, and expiring share links — handled.</p>
+        <div class="flex items-center justify-center gap-3 flex-wrap">
+            <a href="/auth.html" class="btn btn-primary cta-swap" style="padding:10px 20px">Create free account <span id="cta-arrow"></span></a>
+            <a href="#how" class="btn" style="padding:10px 20px">See how it works</a>
         </div>
-    </div>
+        <p class="text-dim text-[12.5px] mt-4">Free plan includes 1 GB of storage. No credit card needed.</p>
+    </section>
 
-    <script src="/js/api.js"></script>
-    <script src="/js/auth.js"></script>
+    <!-- Product preview -->
+    <section class="landing-section pt-14">
+        <div class="mock">
+            <div class="mock-top">
+                <span class="mock-dot"></span><span class="mock-dot"></span><span class="mock-dot"></span>
+                <div class="mx-auto flex items-center gap-2 text-dim" style="font-size:11.5px">
+                    <span id="mock-lock"></span> app.storix — workspace
+                </div>
+            </div>
+            <div class="mock-body">
+                <div class="mock-side">
+                    <div class="mock-row" style="color:var(--accent)"><span id="mock-i1"></span>My Files</div>
+                    <div class="mock-row"><span id="mock-i2"></span>Recent</div>
+                    <div class="mock-row"><span id="mock-i3"></span>Shared</div>
+                    <div class="mock-row"><span id="mock-i4"></span>Starred</div>
+                    <div class="mock-row"><span id="mock-i5"></span>Trash</div>
+                    <div style="margin-top:14px;padding:0 10px">
+                        <div style="height:5px;border-radius:99px;background:var(--elevated);overflow:hidden">
+                            <div style="height:100%;width:38%;background:var(--accent);border-radius:99px"></div>
+                        </div>
+                        <div class="text-dim mt-1.5" style="font-size:10.5px">382 MB of 1 GB</div>
+                    </div>
+                </div>
+                <div class="mock-main">
+                    <div class="flex items-center justify-between mb-3">
+                        <div style="height:9px;width:110px;border-radius:6px;background:var(--elevated)"></div>
+                        <div class="flex items-center gap-2">
+                            <div style="height:26px;width:120px;border-radius:8px;border:1px solid var(--lineS)"></div>
+                            <div style="height:26px;width:74px;border-radius:8px;background:var(--accent)"></div>
+                        </div>
+                    </div>
+                    <div class="mock-row"><span class="ft-icon doc" style="width:26px;height:26px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg></span>Q3-report.pdf<span class="ml-auto">2.4 MB</span></div>
+                    <div class="mock-row"><span class="ft-icon image" style="width:26px;height:26px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg></span>team-offsite.jpg<span class="ml-auto">8.1 MB</span></div>
+                    <div class="mock-row"><span class="ft-icon code" style="width:26px;height:26px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>deploy.sh<span class="ml-auto">1.2 KB</span></div>
+                    <div class="mock-row"><span class="ft-icon archive" style="width:26px;height:26px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/></svg></span>assets-backup.zip<span class="ml-auto">184 MB</span></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How it works -->
+    <section class="landing-section" id="how">
+        <div class="grid md:grid-cols-3 gap-5">
+            <div class="panel p-7">
+                <div class="feature-icon" data-icon="upload"></div>
+                <h3 class="font-semibold mb-1.5" style="font-size:15px">Upload effortlessly</h3>
+                <p class="text-mut text-[13.5px]">Drag and drop files or pick them from your device. Multi-file uploads with live progress, and versions are kept when you re-upload the same file.</p>
+            </div>
+            <div class="panel p-7">
+                <div class="feature-icon" data-icon="folder"></div>
+                <h3 class="font-semibold mb-1.5" style="font-size:15px">Stay organized</h3>
+                <p class="text-mut text-[13.5px]">Folders, starring, search, and a trash you can restore from. Recent and Shared views keep what matters one click away.</p>
+            </div>
+            <div class="panel p-7">
+                <div class="feature-icon" data-icon="link"></div>
+                <h3 class="font-semibold mb-1.5" style="font-size:15px">Share with control</h3>
+                <p class="text-mut text-[13.5px]">Generate expiring share links that work for anyone, or mark files public. Sharing is gated by your plan — you decide what leaves your workspace.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section class="landing-section" id="features">
+        <h2 class="text-center font-bold mb-2" style="font-size:32px">Everything a personal drive needs</h2>
+        <p class="text-center text-mut text-[14.5px] mb-12">No clutter, no noise. Just the tools that make storing files feel effortless.</p>
+        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div class="p-5">
+                <div class="feature-icon" data-icon="drive"></div>
+                <h3 class="font-semibold mb-1" style="font-size:14px">Storage tracking</h3>
+                <p class="text-mut text-[13px]">See exactly how much of your plan you're using, updated with every upload and delete.</p>
+            </div>
+            <div class="p-5">
+                <div class="feature-icon" data-icon="lock"></div>
+                <h3 class="font-semibold mb-1" style="font-size:14px">Private by default</h3>
+                <p class="text-mut text-[13px]">Files are yours alone unless you share them. Access is checked on every request.</p>
+            </div>
+            <div class="p-5">
+                <div class="feature-icon" data-icon="history"></div>
+                <h3 class="font-semibold mb-1" style="font-size:14px">File versioning</h3>
+                <p class="text-mut text-[13px]">Upload over an existing file and older versions stay recoverable.</p>
+            </div>
+            <div class="p-5">
+                <div class="feature-icon" data-icon="zap"></div>
+                <h3 class="font-semibold mb-1" style="font-size:14px">Built to feel fast</h3>
+                <p class="text-mut text-[13px]">A keyboard-friendly, minimal workspace that stays out of your way.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Plans -->
+    <section class="landing-section" id="plans">
+        <h2 class="text-center font-bold mb-2" style="font-size:32px">Simple plans</h2>
+        <p class="text-center text-mut text-[14.5px] mb-12">Start free. Upgrade when your library grows.</p>
+        <div class="grid md:grid-cols-3 gap-5">
+            <div class="plan-card">
+                <h3 class="font-semibold mb-1" style="font-size:16px">Free</h3>
+                <p class="text-dim text-[12.5px] mb-5">The essentials</p>
+                <p class="mb-5"><span class="font-bold" style="font-size:30px;font-family:var(--font-display)">$0</span><span class="text-dim text-[12.5px]">/mo</span></p>
+                <ul class="space-y-2 text-[13px] text-mut">
+                    <li>1 GB storage</li><li>100 MB max file size</li><li>Private files only</li>
+                </ul>
+                <a href="/auth.html" class="btn w-full mt-6">Get started</a>
+            </div>
+            <div class="plan-card current">
+                <span class="plan-tag">Most popular</span>
+                <h3 class="font-semibold mb-1" style="font-size:16px">Pro</h3>
+                <p class="text-dim text-[12.5px] mb-5">For daily use</p>
+                <p class="mb-5"><span class="font-bold" style="font-size:30px;font-family:var(--font-display)">$10</span><span class="text-dim text-[12.5px]">/mo</span></p>
+                <ul class="space-y-2 text-[13px] text-mut">
+                    <li>10 GB storage</li><li>1 GB max file size</li><li>Public files &amp; share links</li>
+                </ul>
+                <a href="/auth.html" class="btn btn-primary w-full mt-6">Get started</a>
+            </div>
+            <div class="plan-card">
+                <h3 class="font-semibold mb-1" style="font-size:16px">Premium</h3>
+                <p class="text-dim text-[12.5px] mb-5">For large libraries</p>
+                <p class="mb-5"><span class="font-bold" style="font-size:30px;font-family:var(--font-display)">$20</span><span class="text-dim text-[12.5px]">/mo</span></p>
+                <ul class="space-y-2 text-[13px] text-mut">
+                    <li>100 GB storage</li><li>10 GB max file size</li><li>Public files &amp; share links</li>
+                </ul>
+                <a href="/auth.html" class="btn w-full mt-6">Get started</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="landing-section text-center pb-24">
+        <div class="panel p-12">
+            <h2 class="font-bold mb-3" style="font-size:28px">Ready to move in?</h2>
+            <p class="text-mut text-[14.5px] mb-7">Create your workspace in under a minute.</p>
+            <a href="/auth.html" class="btn btn-primary" style="padding:10px 22px">Create free account</a>
+        </div>
+    </section>
+
+    <footer class="border-t border-line py-8">
+        <div class="max-w-[1060px] mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-[12.5px] text-dim">
+            <span class="logo text-[14px]"><span class="logo-mark" style="width:20px;height:20px;border-radius:6px" id="logo-mark-2"></span>StoriX</span>
+            <span>Built with FastAPI. © 2026 StoriX</span>
+        </div>
+    </footer>
+
+    <script src="/js/ui.js?v=3"></script>
+    <script>
+        document.getElementById('logo-mark').innerHTML = icon('logo');
+        document.getElementById('logo-mark-2').innerHTML = icon('logo');
+        document.getElementById('eyebrow-icon').innerHTML = icon('drive') + ' Personal cloud storage';
+        document.getElementById('cta-arrow').innerHTML = icon('arrowRight');
+        document.getElementById('mock-lock').innerHTML = icon('lock');
+        const mockIds = { 'mock-i1': 'files', 'mock-i2': 'clock', 'mock-i3': 'globe', 'mock-i4': 'star', 'mock-i5': 'trash' };
+        Object.entries(mockIds).forEach(([id, name]) => document.getElementById(id).innerHTML = icon(name));
+        document.querySelectorAll('[data-icon]').forEach(el => el.innerHTML = icon(el.dataset.icon));
+        // already signed in? point primary CTAs at the workspace
+        if (localStorage.getItem('access_token')) {
+            document.querySelectorAll('a.cta-swap').forEach(a => {
+                a.href = '/dashboard.html';
+                a.innerHTML = 'Open workspace';
+            });
+        }
+    </script>
 </body>
 </html>

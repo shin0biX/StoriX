@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // If already logged in, redirect to dashboard
+    // If already logged in, go straight to the workspace
     if (getToken()) {
         window.location.href = '/dashboard.html';
         return;
@@ -7,33 +7,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const loginForm = document.getElementById('login-form');
     const registerForm = document.getElementById('register-form');
-    
+
+    function showError(el, message) {
+        el.textContent = message;
+        el.style.display = 'inline-flex';
+    }
+    function hideError(el) {
+        el.style.display = 'none';
+    }
+
     // Toggle forms
     document.getElementById('show-register').addEventListener('click', (e) => {
         e.preventDefault();
-        loginForm.classList.add('hidden');
-        registerForm.classList.remove('hidden');
+        loginForm.style.display = 'none';
+        registerForm.style.display = 'block';
     });
 
     document.getElementById('show-login').addEventListener('click', (e) => {
         e.preventDefault();
-        registerForm.classList.add('hidden');
-        loginForm.classList.remove('hidden');
+        registerForm.style.display = 'none';
+        loginForm.style.display = 'block';
     });
 
     // Login
     document.getElementById('login-btn').addEventListener('click', async () => {
-        const username = document.getElementById('login-username').value;
+        const username = document.getElementById('login-username').value.trim();
         const password = document.getElementById('login-password').value;
         const errorEl = document.getElementById('login-error');
-        errorEl.classList.add('hidden');
+        const btn = document.getElementById('login-btn');
+        hideError(errorEl);
 
         if (!username || !password) {
-            errorEl.textContent = 'Please fill in all fields';
-            errorEl.classList.remove('hidden');
+            showError(errorEl, 'Please fill in all fields');
             return;
         }
 
+        btn.disabled = true;
         try {
             const formData = new URLSearchParams();
             formData.append('username', username);
@@ -41,39 +50,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const res = await apiFetch('/auth/token', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                },
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: formData.toString()
             });
 
             setToken(res.access_token);
             window.location.href = '/dashboard.html';
         } catch (err) {
-            errorEl.textContent = err.message;
-            errorEl.classList.remove('hidden');
+            showError(errorEl, err.message);
+        } finally {
+            btn.disabled = false;
         }
     });
 
     // Register
     document.getElementById('register-btn').addEventListener('click', async () => {
-        const fullname = document.getElementById('reg-fullname').value;
-        const email = document.getElementById('reg-email').value;
-        const username = document.getElementById('reg-username').value;
+        const fullname = document.getElementById('reg-fullname').value.trim();
+        const email = document.getElementById('reg-email').value.trim();
+        const username = document.getElementById('reg-username').value.trim();
         const password = document.getElementById('reg-password').value;
-        
+
         const errorEl = document.getElementById('register-error');
         const successEl = document.getElementById('register-success');
-        
-        errorEl.classList.add('hidden');
-        successEl.classList.add('hidden');
+        const btn = document.getElementById('register-btn');
+
+        hideError(errorEl);
+        successEl.style.display = 'none';
 
         if (!fullname || !email || !username || !password) {
-            errorEl.textContent = 'Please fill in all fields';
-            errorEl.classList.remove('hidden');
+            showError(errorEl, 'Please fill in all fields');
             return;
         }
 
+        btn.disabled = true;
         try {
             await apiFetch('/auth/', {
                 method: 'POST',
@@ -82,17 +91,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     email: email,
                     username: username,
                     password: password,
-                    plan_id: 1 // Default to 1 (Free)
+                    plan_id: 1 // Free plan
                 })
             });
 
-            successEl.classList.remove('hidden');
+            successEl.style.display = 'inline-flex';
             setTimeout(() => {
                 document.getElementById('show-login').click();
-            }, 1500);
+                toast('Account created — sign in to continue', 'success');
+            }, 1200);
         } catch (err) {
-            errorEl.textContent = err.message;
-            errorEl.classList.remove('hidden');
+            showError(errorEl, err.message);
+        } finally {
+            btn.disabled = false;
         }
     });
 });
