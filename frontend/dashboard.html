@@ -1,149 +1,249 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - StoriX</title>
+    <title>Workspace — StoriX</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        brand: {
-                            500: '#3b82f6',
-                            600: '#2563eb',
-                        }
-                    }
-                }
-            }
-        }
+        tailwind.config = { theme: { extend: { colors: {
+            bg: '#0d0d0f', surface: '#151518', elevated: '#1b1b20',
+            ink: '#f5f5f5', mut: '#92929b', dim: '#5f5f6b',
+            line: 'rgba(255,255,255,0.07)', lineS: 'rgba(255,255,255,0.13)', acc: '#34d399',
+        }}}}
     </script>
-    <style>
-        body {
-            background-color: #0f172a;
-            color: #f8fafc;
-            font-family: 'Inter', sans-serif;
-        }
-        .glass-panel {
-            background: rgba(30, 41, 59, 0.7);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-    </style>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/app.css?v=3">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 </head>
-<body class="min-h-screen p-4 md:p-8">
-    <div class="max-w-6xl mx-auto space-y-6">
-        <!-- Header -->
-        <header class="glass-panel rounded-2xl p-6 flex flex-col md:flex-row justify-between items-center gap-4 shadow-lg">
-            <div class="flex items-center gap-4">
-                <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">StoriX</h1>
-                <div class="h-8 w-px bg-slate-700"></div>
-                <div id="user-info" class="text-slate-300">Loading user...</div>
-            </div>
-            <div class="flex items-center gap-4">
-                <button id="plan-btn" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg border border-slate-700 transition-colors text-sm font-medium">Change Plan</button>
-                <button id="logout-btn" class="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg transition-colors text-sm font-medium">Logout</button>
-            </div>
-        </header>
+<body>
+<div class="app-shell">
 
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <!-- Sidebar: Storage & Upload -->
-            <div class="md:col-span-1 space-y-6">
-                <div class="glass-panel p-6 rounded-2xl shadow-lg">
-                    <h2 class="text-lg font-semibold mb-4">Storage</h2>
-                    <div class="w-full bg-slate-800 rounded-full h-3 mb-2 overflow-hidden">
-                        <div id="storage-bar" class="bg-gradient-to-r from-blue-500 to-purple-500 h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
-                    </div>
-                    <p id="storage-text" class="text-sm text-slate-400">0 MB / 0 MB</p>
-                </div>
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="nav-section" style="padding:18px 16px 10px">
+            <a href="/" class="logo text-[17px]"><span class="logo-mark" id="logo-mark"></span>StoriX</a>
+        </div>
 
-                <div class="glass-panel p-6 rounded-2xl shadow-lg">
-                    <h2 class="text-lg font-semibold mb-4">Upload File</h2>
-                    <div class="border-2 border-dashed border-slate-600 rounded-xl p-4 text-center hover:border-brand-500 transition-colors cursor-pointer relative" id="drop-zone">
-                        <p class="text-slate-400 text-sm mb-2">Drag & drop or click</p>
-                        <input type="file" id="file-input" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
-                    </div>
-                    <button id="upload-btn" class="w-full mt-4 bg-brand-600 hover:bg-brand-500 text-white font-medium py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Upload</button>
-                    <div id="upload-status" class="mt-2 text-sm text-center"></div>
-                </div>
+        <nav class="nav-section">
+            <button class="nav-item active" data-view="files" id="nav-files"><span class="nav-ic" data-ic="files"></span>My Files</button>
+            <button class="nav-item" data-view="recent"><span class="nav-ic" data-ic="clock"></span>Recent</button>
+            <button class="nav-item" data-view="shared"><span class="nav-ic" data-ic="globe"></span>Shared<span class="nav-count" id="nav-count-shared"></span></button>
+            <button class="nav-item" data-view="starred"><span class="nav-ic" data-ic="star"></span>Starred<span class="nav-count" id="nav-count-starred"></span></button>
+            <button class="nav-item" data-view="trash"><span class="nav-ic" data-ic="trash"></span>Trash<span class="nav-count" id="nav-count-trash"></span></button>
+            <button class="nav-item" data-goto="/admin.html" id="nav-admin" style="display:none"><span class="nav-ic" data-ic="users"></span>Admin</button>
+        </nav>
+
+        <div style="flex:1"></div>
+
+        <!-- Storage meter -->
+        <div class="storage-meter">
+            <div class="flex items-center justify-between text-[12px]">
+                <span class="text-mut font-medium" style="display:inline-flex;align-items:center;gap:6px"><span data-ic="drive" style="display:inline-flex"></span>Storage</span>
+                <span id="sb-plan-badge" class="badge">—</span>
             </div>
+            <div class="storage-bar-track"><div class="storage-bar-fill" id="sb-bar" style="width:0%"></div></div>
+            <div class="flex items-center justify-between text-[11.5px] text-dim mono">
+                <span id="sb-used">0 B</span>
+                <span id="sb-limit">0 B</span>
+            </div>
+            <button class="btn btn-sm w-full mt-3" id="btn-upgrade"><span data-ic="zap"></span>Change plan</button>
+        </div>
 
-            <!-- Main: Files List -->
-            <div class="md:col-span-3">
-                <div class="glass-panel rounded-2xl shadow-lg p-6 min-h-[500px]">
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-xl font-bold">Your Files</h2>
-                    </div>
-                    
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="border-b border-slate-700/50">
-                                    <th class="py-3 px-4 font-semibold text-slate-300">Name</th>
-                                    <th class="py-3 px-4 font-semibold text-slate-300">Size</th>
-                                    <th class="py-3 px-4 font-semibold text-slate-300 text-center">Public</th>
-                                    <th class="py-3 px-4 font-semibold text-slate-300 text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="files-list" class="divide-y divide-slate-700/50">
-                                <!-- Files injected here -->
-                                <tr><td colspan="4" class="text-center py-8 text-slate-500">Loading files...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
+        <!-- User -->
+        <div class="nav-section" style="border-top:1px solid var(--border);padding:12px 16px">
+            <div class="flex items-center gap-3">
+                <div id="sb-avatar" style="width:32px;height:32px;border-radius:999px;background:var(--elevated);border:1px solid var(--border-strong);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--accent);flex:none">—</div>
+                <div style="min-width:0;flex:1">
+                    <div id="sb-username" class="text-[13px] font-medium" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Loading…</div>
+                    <div class="text-[11px] text-dim" id="sb-plan-name"></div>
                 </div>
+                <button class="icon-action" id="btn-logout" title="Log out" data-ic="logout"></button>
             </div>
         </div>
-    </div>
+    </aside>
+    <div class="sidebar-scrim" id="scrim"></div>
 
-    <!-- Plan Modal -->
-    <div id="plan-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="glass-panel p-8 rounded-2xl w-full max-w-2xl relative">
-            <button id="close-plan-modal" class="absolute top-4 right-4 text-slate-400 hover:text-white">&times;</button>
-            <h2 class="text-2xl font-bold mb-6 text-center">Select a Plan</h2>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <!-- Free -->
-                <div class="bg-slate-800/80 p-6 rounded-xl border border-slate-700 text-center hover:border-brand-500 transition-colors">
-                    <h3 class="font-bold text-xl mb-2">Free</h3>
-                    <p class="text-slate-400 text-sm mb-4">1 GB Storage<br>No Sharing</p>
-                    <p class="text-2xl font-bold mb-4">$0<span class="text-sm text-slate-400">/mo</span></p>
-                    <button class="select-plan-btn w-full bg-slate-700 hover:bg-slate-600 py-2 rounded-lg" data-plan="Free">Select</button>
+    <!-- Main -->
+    <div class="app-main">
+        <div class="topbar">
+            <button class="btn btn-ghost btn-icon sidebar-toggle" id="btn-menu" data-ic="menu"></button>
+            <div class="search-box" style="width:min(380px,100%)">
+                <span data-ic="search"></span>
+                <input class="input" id="search-input" type="text" placeholder="Search files…" autocomplete="off">
+                <kbd>/</kbd>
+            </div>
+            <div style="flex:1"></div>
+            <button class="btn btn-primary" id="btn-upload"><span data-ic="upload"></span>Upload</button>
+        </div>
+
+        <div class="content-scroll">
+            <!-- Toolbar -->
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+                <div>
+                    <h1 class="font-semibold" style="font-size:21px;margin:0" id="view-title">My Files</h1>
+                    <p class="text-dim text-[12.5px] m-0 mt-0.5" id="view-sub"></p>
                 </div>
-                <!-- Pro -->
-                <div class="bg-slate-800/80 p-6 rounded-xl border border-brand-500 text-center relative shadow-[0_0_15px_rgba(59,130,246,0.3)]">
-                    <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-500 text-xs px-2 py-1 rounded-full">Popular</div>
-                    <h3 class="font-bold text-xl mb-2">Pro</h3>
-                    <p class="text-slate-400 text-sm mb-4">10 GB Storage<br>Public Sharing</p>
-                    <p class="text-2xl font-bold mb-4">$10<span class="text-sm text-slate-400">/mo</span></p>
-                    <button class="select-plan-btn w-full bg-brand-600 hover:bg-brand-500 py-2 rounded-lg" data-plan="Pro">Select</button>
-                </div>
-                <!-- Premium -->
-                <div class="bg-slate-800/80 p-6 rounded-xl border border-slate-700 text-center hover:border-brand-500 transition-colors">
-                    <h3 class="font-bold text-xl mb-2">Premium</h3>
-                    <p class="text-slate-400 text-sm mb-4">100 GB Storage<br>Public Sharing</p>
-                    <p class="text-2xl font-bold mb-4">$20<span class="text-sm text-slate-400">/mo</span></p>
-                    <button class="select-plan-btn w-full bg-slate-700 hover:bg-slate-600 py-2 rounded-lg" data-plan="Premium">Select</button>
+                <div class="flex items-center gap-2" id="toolbar-main">
+                    <select class="select" id="sort-select" style="width:auto;padding:7px 30px 7px 12px">
+                        <option value="date-desc">Newest first</option>
+                        <option value="date-asc">Oldest first</option>
+                        <option value="name">Name A–Z</option>
+                        <option value="size-desc">Largest first</option>
+                        <option value="size-asc">Smallest first</option>
+                    </select>
+                    <button class="btn btn-icon" id="btn-view-mode" title="Toggle grid / list view"></button>
                 </div>
             </div>
-            <div id="plan-status" class="mt-4 text-center text-sm"></div>
+
+            <!-- Breadcrumbs / folder row -->
+            <div class="flex items-center justify-between gap-3 mb-4 flex-wrap" id="crumb-row">
+                <div class="crumbs" id="crumbs"></div>
+                <div class="flex items-center gap-2">
+                    <button class="btn btn-sm" id="btn-new-folder"><span data-ic="folderPlus"></span>New folder</button>
+                    <button class="btn btn-sm btn-danger" id="btn-empty-trash" style="display:none"><span data-ic="trash"></span>Empty trash</button>
+                </div>
+            </div>
+
+            <!-- Bulk bar -->
+            <div class="panel flex items-center gap-3 px-4 py-2.5 mb-4" id="bulk-bar" style="display:none">
+                <span class="text-[13px]"><span id="bulk-count" class="font-semibold"></span> selected</span>
+                <div style="flex:1"></div>
+                <button class="btn btn-sm" id="btn-bulk-zip"><span data-ic="download"></span>Download as ZIP</button>
+                <button class="btn btn-sm btn-danger" id="btn-bulk-delete"><span data-ic="trash"></span>Delete</button>
+                <button class="btn btn-sm btn-ghost" id="btn-bulk-clear">Clear</button>
+            </div>
+
+            <!-- Storage by type -->
+            <div class="panel px-5 py-4 mb-5" id="type-breakdown" style="display:none"></div>
+
+            <!-- Dropzone -->
+            <div class="dropzone mb-5" id="dropzone">
+                <span style="display:inline-flex" data-ic="upload"></span>
+                <p class="m-0 text-[13.5px]"><span class="font-medium" style="color:var(--text)">Drop files here</span> or click to browse — multiple files supported</p>
+                <p class="m-0 text-[11.5px] mt-1" id="dz-hint"></p>
+                <input type="file" id="file-input" multiple style="display:none">
+            </div>
+
+            <!-- Browser -->
+            <div id="browser" class="panel view-fade" style="min-height:280px;overflow:hidden"></div>
         </div>
     </div>
+</div>
 
-    <!-- Share Modal -->
-    <div id="share-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="glass-panel p-6 rounded-2xl w-full max-w-md relative">
-            <button id="close-share-modal" class="absolute top-4 right-4 text-slate-400 hover:text-white">&times;</button>
-            <h2 class="text-xl font-bold mb-4">Share Link</h2>
-            <p class="text-sm text-slate-400 mb-4">This link will expire in 30 minutes.</p>
-            <input type="text" id="share-link-input" readonly class="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2 text-sm text-slate-300 mb-4" />
-            <button id="copy-share-btn" class="w-full bg-brand-600 hover:bg-brand-500 py-2 rounded-lg font-medium transition-colors">Copy Link</button>
+<!-- Upload manager -->
+<div class="upload-panel" id="upload-panel" style="display:none">
+    <div class="up-head">
+        <span id="upload-title">Uploading…</span>
+        <button class="icon-action" id="btn-upload-close" style="display:none" data-ic="x"></button>
+    </div>
+    <div id="upload-list" style="max-height:280px;overflow-y:auto"></div>
+</div>
+
+<!-- Share modal -->
+<div class="modal-backdrop" id="modal-share">
+    <div class="modal" style="max-width:460px">
+        <div class="modal-head"><h3>Share file</h3><button class="btn btn-ghost btn-icon" data-close data-ic="x"></button></div>
+        <div class="modal-body">
+            <label class="field-label">Link expires in</label>
+            <select class="select mb-4" id="share-expiry">
+                <option value="30">30 minutes</option>
+                <option value="60">1 hour</option>
+                <option value="1440">24 hours</option>
+            </select>
+            <label class="field-label">Share link</label>
+            <div class="flex gap-2">
+                <input class="input mono" id="share-link-input" readonly placeholder="Create a link to continue">
+                <button class="btn btn-icon" id="btn-copy-link" title="Copy" data-ic="copy"></button>
+            </div>
+            <p class="text-dim text-[12px] mt-2.5 m-0" id="share-file-name"></p>
+        </div>
+        <div class="modal-foot">
+            <button class="btn btn-ghost" data-close>Close</button>
+            <button class="btn btn-primary" id="btn-create-link"><span data-ic="link"></span>Create link</button>
         </div>
     </div>
+</div>
 
-    <script src="/js/api.js"></script>
-    <script src="/js/dashboard.js"></script>
+<!-- Rename modal -->
+<div class="modal-backdrop" id="modal-rename">
+    <div class="modal" style="max-width:400px">
+        <div class="modal-head"><h3>Rename</h3><button class="btn btn-ghost btn-icon" data-close data-ic="x"></button></div>
+        <div class="modal-body">
+            <label class="field-label">New name</label>
+            <input class="input" id="rename-input" autocomplete="off">
+        </div>
+        <div class="modal-foot">
+            <button class="btn btn-ghost" data-close>Cancel</button>
+            <button class="btn btn-primary" id="btn-rename-save">Rename</button>
+        </div>
+    </div>
+</div>
+
+<!-- Move modal -->
+<div class="modal-backdrop" id="modal-move">
+    <div class="modal" style="max-width:400px">
+        <div class="modal-head"><h3>Move file</h3><button class="btn btn-ghost btn-icon" data-close data-ic="x"></button></div>
+        <div class="modal-body">
+            <label class="field-label">Destination folder</label>
+            <select class="select" id="move-select"></select>
+        </div>
+        <div class="modal-foot">
+            <button class="btn btn-ghost" data-close>Cancel</button>
+            <button class="btn btn-primary" id="btn-move-save">Move</button>
+        </div>
+    </div>
+</div>
+
+<!-- New folder modal -->
+<div class="modal-backdrop" id="modal-folder">
+    <div class="modal" style="max-width:400px">
+        <div class="modal-head"><h3>New folder</h3><button class="btn btn-ghost btn-icon" data-close data-ic="x"></button></div>
+        <div class="modal-body">
+            <label class="field-label">Folder name</label>
+            <input class="input" id="folder-name-input" placeholder="e.g. Projects" autocomplete="off">
+        </div>
+        <div class="modal-foot">
+            <button class="btn btn-ghost" data-close>Cancel</button>
+            <button class="btn btn-primary" id="btn-folder-save">Create</button>
+        </div>
+    </div>
+</div>
+
+<!-- Plan modal -->
+<div class="modal-backdrop" id="modal-plan">
+    <div class="modal" style="max-width:760px">
+        <div class="modal-head"><h3>Choose your plan</h3><button class="btn btn-ghost btn-icon" data-close data-ic="x"></button></div>
+        <div class="modal-body">
+            <div class="grid md:grid-cols-3 gap-4" id="plan-grid"></div>
+            <p class="text-center text-[12.5px] mt-4 mb-0" id="plan-status"></p>
+        </div>
+    </div>
+</div>
+
+<!-- Preview modal -->
+<div class="modal-backdrop" id="modal-preview">
+    <div class="modal" style="max-width:860px;height:calc(100vh - 60px)">
+        <div class="modal-head">
+            <h3 id="preview-title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%"></h3>
+            <div class="flex items-center gap-2">
+                <button class="btn btn-sm" id="btn-preview-download"><span data-ic="download"></span>Download</button>
+                <button class="btn btn-ghost btn-icon" data-close data-ic="x"></button>
+            </div>
+        </div>
+        <div class="preview-stage" id="preview-stage"></div>
+    </div>
+</div>
+
+<!-- Versions modal -->
+<div class="modal-backdrop" id="modal-versions">
+    <div class="modal" style="max-width:480px">
+        <div class="modal-head"><h3 id="versions-title">Version history</h3><button class="btn btn-ghost btn-icon" data-close data-ic="x"></button></div>
+        <div class="modal-body" id="versions-list" style="padding:10px"></div>
+    </div>
+</div>
+
+<script src="/js/ui.js?v=3"></script>
+<script src="/js/api.js?v=2"></script>
+<script src="/js/dashboard.js?v=6"></script>
 </body>
 </html>

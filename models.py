@@ -16,7 +16,21 @@ class User(Base):
     plan_id = Column(Integer,ForeignKey("plans.id"),nullable=False)
     plan = relationship("Plan" , back_populates="users")
     files = relationship("FileTable", back_populates="owner")
-    
+    folders = relationship("Folder", back_populates="owner")
+
+
+class Folder(Base):
+    __tablename__ = "folders"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    parent_id = Column(Integer, ForeignKey("folders.id"), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    owner = relationship("User", back_populates="folders")
+    files = relationship("FileTable", back_populates="folder")
+
+
 class FileTable(Base):
     __tablename__ = "filetable"
     id = Column(Integer,primary_key=True, index=True)
@@ -27,10 +41,18 @@ class FileTable(Base):
     user_id = Column(Integer, ForeignKey("users.id"),nullable=False)
     owner = relationship("User" , back_populates="files")
     is_public = Column(Boolean,default=False)
-    
-    
+
+    # trash / organization / versioning
+    deleted_at = Column(DateTime, nullable=True)          # set when file is in trash
+    is_starred = Column(Boolean, default=False)
+    folder_id = Column(Integer, ForeignKey("folders.id"), nullable=True)
+    folder = relationship("Folder", back_populates="files")
+    version = Column(Integer, default=1)                  # 1 for the first upload of a name
+    is_latest = Column(Boolean, default=True)             # False for superseded versions
+
+
 class Plan(Base):
-    
+
     __tablename__ = "plans"
     id = Column(Integer, primary_key=True, index=True)
 
@@ -44,7 +66,7 @@ class Plan(Base):
     # Feature flags
     can_share = Column(Boolean, default=False)
 
-    price = Column(Integer, default=0)  
+    price = Column(Integer, default=0)
 
     # Relationship
     users = relationship("User", back_populates="plan")

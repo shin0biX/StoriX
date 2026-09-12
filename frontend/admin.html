@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin — StoriX</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { theme: { extend: { colors: {
+            bg: '#0d0d0f', surface: '#151518', elevated: '#1b1b20',
+            ink: '#f5f5f5', mut: '#92929b', dim: '#5f5f6b',
+            line: 'rgba(255,255,255,0.07)', lineS: 'rgba(255,255,255,0.13)', acc: '#34d399',
+        }}}}
+    </script>
+    <link rel="stylesheet" href="/css/app.css?v=3">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+        <div class="nav-section" style="padding:18px 16px 10px">
+            <a href="/" class="logo text-[17px]"><span class="logo-mark" id="logo-mark"></span>StoriX</a>
+        </div>
+        <nav class="nav-section">
+            <div class="nav-label">Admin</div>
+            <button class="nav-item active"><span class="nav-ic" data-ic="users"></span>Users</button>
+            <div class="nav-label">Workspace</div>
+            <button class="nav-item" data-goto="/dashboard.html"><span class="nav-ic" data-ic="files"></span>My Files</button>
+        </nav>
+        <div style="flex:1"></div>
+        <div class="nav-section" style="border-top:1px solid var(--border);padding:12px 16px">
+            <div class="flex items-center gap-3">
+                <div id="sb-avatar" style="width:32px;height:32px;border-radius:999px;background:var(--elevated);border:1px solid var(--border-strong);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--accent)">—</div>
+                <div style="min-width:0;flex:1">
+                    <div id="sb-username" class="text-[13px] font-medium">Loading…</div>
+                    <div class="text-[11px] text-dim">Administrator</div>
+                </div>
+                <button class="icon-action" id="btn-logout" title="Log out" data-ic="logout"></button>
+            </div>
+        </div>
+    </aside>
+    <div class="sidebar-scrim" id="scrim"></div>
+
+    <div class="app-main">
+        <div class="topbar">
+            <button class="btn btn-ghost btn-icon sidebar-toggle" id="btn-menu" data-ic="menu"></button>
+            <h2 class="font-semibold text-[15px] m-0">Admin console</h2>
+        </div>
+        <div class="content-scroll">
+            <div id="stats-row" class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6"></div>
+
+            <div class="panel" style="overflow:hidden">
+                <div class="flex items-center justify-between px-5 py-4" style="border-bottom:1px solid var(--border)">
+                    <h3 class="font-semibold text-[15px] m-0">Users</h3>
+                    <button class="btn btn-sm" id="btn-reload"><span data-ic="restore"></span>Refresh</button>
+                </div>
+                <div style="overflow-x:auto">
+                    <table class="file-table" id="users-table">
+                        <thead><tr>
+                            <th>User</th><th>Email</th><th>Plan</th><th>Files</th><th>Storage</th><th style="width:180px">Actions</th>
+                        </tr></thead>
+                        <tbody><tr><td colspan="6" style="text-align:center;padding:40px"><span class="spinner"></span></td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/js/ui.js?v=3"></script>
+<script src="/js/api.js?v=2"></script>
+<script src="/js/admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign in — StoriX</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { theme: { extend: { colors: {
+            bg: '#0d0d0f', surface: '#151518', elevated: '#1b1b20',
+            ink: '#f5f5f5', mut: '#92929b', dim: '#5f5f6b',
+            line: 'rgba(255,255,255,0.07)', acc: '#34d399',
+        }}}}
+    </script>
+    <link rel="stylesheet" href="/css/app.css?v=3">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="auth-shell">
+        <div class="auth-bg-glow"></div>
+        <div class="auth-bg-glow two"></div>
+
+        <div>
+            <div class="flex justify-center mb-6">
+                <a href="/" class="logo text-xl"><span class="logo-mark" id="logo-mark"></span>StoriX</a>
+            </div>
+
+            <div class="auth-card">
+                <!-- Login -->
+                <div id="login-form">
+                    <h1 class="font-semibold mb-1" style="font-size:20px">Welcome back</h1>
+                    <p class="text-mut text-[13.5px] mb-6">Sign in to your workspace.</p>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="field-label" for="login-username">Username</label>
+                            <input class="input" type="text" id="login-username" placeholder="Enter your username" autocomplete="username">
+                        </div>
+                        <div>
+                            <label class="field-label" for="login-password">Password</label>
+                            <input class="input" type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
+                        </div>
+                        <div id="login-error" class="badge badge-danger hidden" style="display:none"></div>
+                        <button id="login-btn" class="btn btn-primary w-full" style="padding:10px">Sign In</button>
+                    </div>
+                    <p class="text-center text-mut text-[13px] mt-6">
+                        Don't have an account? <a href="#" id="show-register">Create one</a>
+                    </p>
+                </div>
+
+                <!-- Register -->
+                <div id="register-form" style="display:none">
+                    <h1 class="font-semibold mb-1" style="font-size:20px">Create your account</h1>
+                    <p class="text-mut text-[13.5px] mb-6">Start with 1 GB of free storage.</p>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="field-label" for="reg-fullname">Full name</label>
+                            <input class="input" type="text" id="reg-fullname" placeholder="John Doe" autocomplete="name">
+                        </div>
+                        <div>
+                            <label class="field-label" for="reg-email">Email</label>
+                            <input class="input" type="email" id="reg-email" placeholder="john@example.com" autocomplete="email">
+                        </div>
+                        <div>
+                            <label class="field-label" for="reg-username">Username</label>
+                            <input class="input" type="text" id="reg-username" placeholder="johndoe" autocomplete="username">
+                        </div>
+                        <div>
+                            <label class="field-label" for="reg-password">Password</label>
+                            <input class="input" type="password" id="reg-password" placeholder="••••••••" autocomplete="new-password">
+                        </div>
+                        <div id="register-error" class="badge badge-danger" style="display:none"></div>
+                        <div id="register-success" class="badge badge-accent" style="display:none">Registration successful! You can now sign in.</div>
+                        <button id="register-btn" class="btn btn-primary w-full" style="padding:10px">Sign Up</button>
+                    </div>
+                    <p class="text-center text-mut text-[13px] mt-6">
+                        Already have an account? <a href="#" id="show-login">Sign in</a>
+                    </p>
+                </div>
+            </div>
+
+            <p class="text-center text-dim text-[12px] mt-5"><a href="/" style="color:var(--text-3)">← Back to home</a></p>
+        </div>
+    </div>
+
+    <script src="/js/ui.js?v=3"></script>
+    <script src="/js/api.js?v=2"></script>
+    <script src="/js/auth.js?v=2"></script>
+    <script>document.getElementById('logo-mark').innerHTML = icon('logo');</script>
+</body>
+</html>

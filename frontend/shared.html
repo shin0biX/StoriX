@@ -1,70 +1,88 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Download Shared File - StoriX</title>
+    <title>Shared file — StoriX</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        brand: {
-                            500: '#3b82f6',
-                            600: '#2563eb',
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-    <style>
-        body {
-            background-color: #0f172a;
-            color: #f8fafc;
-            font-family: 'Inter', sans-serif;
-        }
-        .glass-panel {
-            background: rgba(30, 41, 59, 0.7);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-    </style>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/app.css?v=3">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 </head>
-<body class="min-h-screen flex flex-col items-center justify-center p-4">
-    <div class="glass-panel p-8 rounded-2xl shadow-2xl w-full max-w-md text-center">
-        <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500 mb-2">StoriX</h1>
-        <p class="text-slate-400 mb-8">Shared File Download</p>
-        
-        <div id="status-message" class="text-slate-300 mb-6">Preparing your download...</div>
-        
-        <button id="download-btn" class="hidden w-full bg-brand-600 hover:bg-brand-500 text-white font-semibold py-3 rounded-lg transition-colors">
-            Download File
-        </button>
+<body>
+    <div class="auth-shell">
+        <div class="auth-bg-glow"></div>
+        <div class="auth-bg-glow two"></div>
+
+        <div>
+            <div class="flex justify-center mb-6">
+                <a href="/" class="logo text-xl"><span class="logo-mark" id="logo-mark"></span>StoriX</a>
+            </div>
+
+            <div class="auth-card text-center">
+                <div class="empty-state" style="padding:8px 0 18px">
+                    <div class="empty-icon" id="share-icon" style="margin:0 auto 14px;width:56px;height:56px;border-radius:16px"></div>
+                    <h3 id="status-title" style="font-size:17px">Shared file</h3>
+                    <p id="status-message" style="margin-top:4px">Preparing your secure download…</p>
+                </div>
+                <button id="download-btn" class="btn btn-primary w-full" style="padding:11px;display:none">
+                    <span id="dl-ic"></span> Download file
+                </button>
+                <p class="text-dim text-[12px] mt-4 mb-0">Links expire automatically — this one is time-limited by the sender.</p>
+            </div>
+        </div>
     </div>
 
+    <script src="/js/ui.js?v=3"></script>
+    <script src="/js/api.js?v=2"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const pathParts = window.location.pathname.split('/');
-            const token = pathParts[pathParts.length - 1] || new URLSearchParams(window.location.search).get('token');
-            const statusMsg = document.getElementById('status-message');
-            const downloadBtn = document.getElementById('download-btn');
+        document.getElementById('logo-mark').innerHTML = icon('logo');
+        document.getElementById('share-icon').innerHTML = icon('share');
+        document.getElementById('dl-ic').innerHTML = icon('download');
 
-            if (!token) {
-                statusMsg.textContent = "Invalid or missing share token.";
-                statusMsg.classList.add('text-red-400');
-                return;
+        const statusTitle = document.getElementById('status-title');
+        const statusMsg = document.getElementById('status-message');
+        const downloadBtn = document.getElementById('download-btn');
+
+        const isPagePath = window.location.pathname.endsWith('shared.html');
+        const queryToken = new URLSearchParams(window.location.search).get('token');
+        const pathToken = window.location.pathname.split('/').filter(Boolean).pop();
+        const token = isPagePath ? queryToken : (pathToken || queryToken);
+
+        if (!token) {
+            statusTitle.textContent = 'Invalid link';
+            statusMsg.textContent = 'This share link is missing its token.';
+            statusMsg.style.color = 'var(--danger)';
+        } else {
+            statusMsg.textContent = 'Your download is ready. Click below to save the file.';
+            downloadBtn.style.display = 'inline-flex';
+        }
+
+        downloadBtn.addEventListener('click', async () => {
+            downloadBtn.disabled = true;
+            statusMsg.style.color = 'var(--text-2)';
+            statusMsg.textContent = 'Downloading…';
+            try {
+                const res = await fetch(`/files/shared/${token}`);
+                if (!res.ok) {
+                    let detail = 'This link is invalid or has expired.';
+                    try { const j = await res.json(); if (j.detail) detail = j.detail; } catch {}
+                    throw new Error(detail);
+                }
+                const blob = await res.blob();
+                const cd = res.headers.get('content-disposition') || '';
+                let filename = 'shared-file';
+                if (cd.includes('filename=')) filename = cd.split('filename=')[1].replace(/"/g, '');
+                saveBlob(blob, filename);
+                statusTitle.textContent = 'Downloaded';
+                statusMsg.style.color = 'var(--accent)';
+                statusMsg.textContent = `${filename} saved to your device.`;
+            } catch (err) {
+                statusTitle.textContent = 'Download failed';
+                statusMsg.style.color = 'var(--danger)';
+                statusMsg.textContent = err.message;
+            } finally {
+                downloadBtn.disabled = false;
             }
-
-            statusMsg.textContent = "Ready to download!";
-            downloadBtn.classList.remove('hidden');
-
-            downloadBtn.addEventListener('click', () => {
-                window.location.href = `/files/shared/${token}`;
-            });
         });
     </script>
 </body>
