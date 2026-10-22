@@ -2,10 +2,27 @@ services:
   storix:
     build: .
     ports:
-      - "8000:8000"
+      - "${STORIX_PORT:-8000}:8000"
+    environment:
+      STORIX_ENV: production
+      # Required. Generate with:
+      #   python -c "import secrets; print(secrets.token_urlsafe(64))"
+      STORIX_SECRET_KEY: ${STORIX_SECRET_KEY:?Set STORIX_SECRET_KEY in .env}
+      STORIX_SHARE_SECRET_KEY: ${STORIX_SHARE_SECRET_KEY:-}
+      STORIX_DATABASE_URL: sqlite:////data/storix.db
+      STORIX_STORAGE_ROOT: /data/storage
+      STORIX_BASE_URL: ${STORIX_BASE_URL:-http://localhost:8000}
+      STORIX_TRUSTED_HOSTS: ${STORIX_TRUSTED_HOSTS:-}
+      STORIX_ALLOW_SELF_PLAN_CHANGE: ${STORIX_ALLOW_SELF_PLAN_CHANGE:-false}
     volumes:
-      - storix-data:/app/storage
+      - storix-data:/data
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
 
 volumes:
   storix-data:

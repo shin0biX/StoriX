@@ -12,7 +12,7 @@
             line: 'rgba(255,255,255,0.07)', lineS: 'rgba(255,255,255,0.13)', acc: '#34d399',
         }}}}
     </script>
-    <link rel="stylesheet" href="/css/app.css?v=3">
+    <link rel="stylesheet" href="/css/app.css?v=8">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -35,7 +35,7 @@
                     <div id="sb-username" class="text-[13px] font-medium">Loading…</div>
                     <div class="text-[11px] text-dim">Administrator</div>
                 </div>
-                <button class="icon-action" id="btn-logout" title="Log out" data-ic="logout"></button>
+                <button class="icon-action" id="btn-logout" title="Log out" aria-label="Log out" data-ic="logout"></button>
             </div>
         </div>
     </aside>
@@ -43,7 +43,7 @@
 
     <div class="app-main">
         <div class="topbar">
-            <button class="btn btn-ghost btn-icon sidebar-toggle" id="btn-menu" data-ic="menu"></button>
+            <button class="btn btn-ghost btn-icon sidebar-toggle" id="btn-menu" title="Open navigation" aria-label="Open navigation" data-ic="menu"></button>
             <h2 class="font-semibold text-[15px] m-0">Admin console</h2>
         </div>
         <div class="content-scroll">
@@ -67,8 +67,8 @@
     </div>
 </div>
 
-<script src="/js/ui.js?v=3"></script>
-<script src="/js/api.js?v=2"></script>
-<script src="/js/admin.js"></script>
+<script src="/js/ui.js?v=4"></script>
+<script src="/js/api.js?v=3"></script>
+<script src="/js/admin.js?v=2"></script>
 </body>
 </html>

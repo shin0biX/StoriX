@@ -1,72 +1,179 @@
-from database import Base
-from sqlalchemy import Column,String,Integer,ForeignKey,DateTime,Boolean
+from __future__ import annotations
+
+import uuid
+from datetime import datetime, timezone
+
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    TypeDecorator,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import relationship
-from datetime import datetime,timezone
+
+from database import Base
+
+
+class UTCDateTime(TypeDecorator):
+    """Store UTC as naive datetimes (SQLite has no tz support) and always
+    return timezone-aware UTC values to the application."""
+
+    impl = DateTime
+    cache_ok = True
+
+    def process_bind_param(self, value: datetime | None, dialect):  # noqa: ANN001
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+    def process_result_value(self, value: datetime | None, dialect):  # noqa: ANN001
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class User(Base):
     __tablename__ = "users"
-    id = Column(Integer,primary_key=True, index=True)
-    email = Column(String,unique=True,nullable=False)
-    username = Column(String,unique=True,nullable=False)
-    full_name = Column(String)
-    hashed_password = Column(String,nullable=False)
-    used_storage=Column(Integer,default=0)
-    role = Column(String, default='user')
-    plan_id = Column(Integer,ForeignKey("plans.id"),nullable=False)
-    plan = relationship("Plan" , back_populates="users")
-    files = relationship("FileTable", back_populates="owner")
-    folders = relationship("Folder", back_populates="owner")
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(320), unique=True, nullable=False)
+    username = Column(String(32), unique=True, nullable=False, index=True)
+    full_name = Column(String(120), nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    used_storage = Column(BigInteger, default=0, nullable=False)
+    role = Column(String(20), default="user", nullable=False)
+    plan_id = Column(
+        Integer, ForeignKey("plans.id", ondelete="RESTRICT"), nullable=False
+    )
+    created_at = Column(UTCDateTime, default=utcnow, nullable=False)
+
+    plan = relationship("Plan", back_populates="users")
+    files = relationship(
+        "FileTable",
+        back_populates="owner",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    folders = relationship(
+        "Folder",
+        back_populates="owner",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    refresh_tokens = relationship(
+        "RefreshToken",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
 
 class Folder(Base):
     __tablename__ = "folders"
+
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False)
-    parent_id = Column(Integer, ForeignKey("folders.id"), nullable=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    name = Column(String(120), nullable=False)
+    parent_id = Column(
+        Integer, ForeignKey("folders.id", ondelete="CASCADE"), nullable=True
+    )
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at = Column(UTCDateTime, default=utcnow, nullable=False)
 
     owner = relationship("User", back_populates="folders")
-    files = relationship("FileTable", back_populates="folder")
+    files = relationship(
+        "FileTable", back_populates="folder", passive_deletes=True
+    )
+
+    __table_args__ = (
+        Index("ix_folders_user_parent", "user_id", "parent_id"),
+    )
 
 
 class FileTable(Base):
     __tablename__ = "filetable"
-    id = Column(Integer,primary_key=True, index=True)
-    filename = Column(String, nullable=False)
-    size = Column(Integer, nullable=False)
-    path = Column(String,nullable=False)
-    uploaded_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    user_id = Column(Integer, ForeignKey("users.id"),nullable=False)
-    owner = relationship("User" , back_populates="files")
-    is_public = Column(Boolean,default=False)
+
+    id = Column(Integer, primary_key=True, index=True)
+    filename = Column(String(255), nullable=False)
+    size = Column(BigInteger, nullable=False)
+    # Path is always relative to STORAGE_ROOT for new uploads. Legacy rows are
+    # resolved defensively in storage.resolve_stored_path().
+    path = Column(String(512), nullable=False)
+    uploaded_at = Column(UTCDateTime, default=utcnow, nullable=False, index=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    owner = relationship("User", back_populates="files")
+    is_public = Column(Boolean, default=False, nullable=False)
 
     # trash / organization / versioning
-    deleted_at = Column(DateTime, nullable=True)          # set when file is in trash
-    is_starred = Column(Boolean, default=False)
-    folder_id = Column(Integer, ForeignKey("folders.id"), nullable=True)
+    deleted_at = Column(UTCDateTime, nullable=True)
+    is_starred = Column(Boolean, default=False, nullable=False)
+    folder_id = Column(
+        Integer, ForeignKey("folders.id", ondelete="SET NULL"), nullable=True
+    )
     folder = relationship("Folder", back_populates="files")
-    version = Column(Integer, default=1)                  # 1 for the first upload of a name
-    is_latest = Column(Boolean, default=True)             # False for superseded versions
+    version = Column(Integer, default=1, nullable=False)
+    is_latest = Column(Boolean, default=True, nullable=False)
+    # Stable identity shared by every version of a logical file. Never derived
+    # from the mutable (filename, folder) pair.
+    version_group = Column(
+        String(32), nullable=False, default=lambda: uuid.uuid4().hex
+    )
+
+    __table_args__ = (
+        Index("ix_filetable_user_active", "user_id", "deleted_at", "is_latest"),
+        Index("ix_filetable_group", "version_group"),
+        Index("ix_filetable_folder", "folder_id"),
+        UniqueConstraint("version_group", "version", name="uq_file_group_version"),
+    )
 
 
 class Plan(Base):
-
     __tablename__ = "plans"
+
     id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(40), unique=True, nullable=False)
+    storage_limit = Column(BigInteger, nullable=False)
+    max_file_size = Column(BigInteger, nullable=False)
+    can_share = Column(Boolean, default=False, nullable=False)
+    price = Column(Integer, default=0, nullable=False)
 
-    # Plan identity
-    name = Column(String, unique=True, nullable=False)  # e.g. Free, Pro, Premium
-
-    # Limits
-    storage_limit = Column(Integer, nullable=False)     # total storage (bytes)
-    max_file_size = Column(Integer, nullable=False)     # per file limit (bytes)
-
-    # Feature flags
-    can_share = Column(Boolean, default=False)
-
-    price = Column(Integer, default=0)
-
-    # Relationship
     users = relationship("User", back_populates="plan")
+
+
+class RefreshToken(Base):
+    """One persisted refresh-token session.
+
+    Access tokens stay stateless. Refresh tokens are rotated on use, and the
+    row lets logout/rotation invalidate a token instead of trusting an
+    unrevocable JWT for two weeks.
+    """
+
+    __tablename__ = "refresh_tokens"
+
+    id = Column(Integer, primary_key=True)
+    jti = Column(String(64), unique=True, nullable=False, index=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    expires_at = Column(UTCDateTime, nullable=False, index=True)
+    created_at = Column(UTCDateTime, default=utcnow, nullable=False)
+    revoked_at = Column(UTCDateTime, nullable=True)
+
+    user = relationship("User", back_populates="refresh_tokens")

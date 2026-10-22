@@ -85,13 +85,51 @@ function formatBytes(bytes) {
 function formatDate(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
   const now = new Date();
   const diff = (now - d) / 1000;
+  if (diff < 0) return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   if (diff < 60) return 'just now';
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   if (diff < 86400 * 7) return `${Math.floor(diff / 86400)}d ago`;
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatAbsoluteDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString(undefined, {
+    year: 'numeric', month: 'short', day: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
+const TEXT_EXTENSIONS = new Set([
+  'txt', 'md', 'markdown', 'csv', 'tsv', 'json', 'xml', 'yml', 'yaml',
+  'js', 'mjs', 'cjs', 'ts', 'jsx', 'tsx', 'css', 'scss', 'html', 'htm',
+  'py', 'rb', 'php', 'java', 'c', 'h', 'cpp', 'hpp', 'cs', 'go', 'rs',
+  'sh', 'bash', 'zsh', 'fish', 'sql', 'toml', 'ini', 'cfg', 'conf',
+  'log', 'env', 'gitignore', 'dockerfile',
+]);
+
+function isTextFile(filename) {
+  const name = String(filename || '');
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  if (TEXT_EXTENSIONS.has(ext)) return true;
+  return ['makefile', 'dockerfile', 'readme', 'license'].includes(name.toLowerCase());
+}
+
+function parseDispositionFilename(header) {
+  if (!header) return null;
+  const encoded = /filename\*\s*=\s*(?:UTF-8'')?([^;]+)/i.exec(header);
+  if (encoded) {
+    try { return decodeURIComponent(encoded[1].trim().replace(/^"|"$/g, '')); } catch {}
+  }
+  const plain = /filename\s*=\s*("([^"]+)"|[^;]+)/i.exec(header);
+  if (plain) return (plain[2] || plain[1] || '').trim().replace(/^"|"$/g, '');
+  return null;
 }
 
 function escapeHtml(str) {
@@ -117,15 +155,27 @@ function toast(message, type = 'info', ms = 3200) {
 }
 
 /* ---------- Modal helpers ---------- */
+let lastFocusedElement = null;
+
 function openModal(el) {
+  lastFocusedElement = document.activeElement;
   el.classList.add('open');
+  el.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
-  const firstInput = el.querySelector('input, textarea, select');
+  const firstInput = el.querySelector('input, textarea, select') || el.querySelector('button');
   if (firstInput) setTimeout(() => firstInput.focus(), 60);
 }
 function closeModal(el) {
+  if (!el.classList.contains('open')) return;
   el.classList.remove('open');
-  document.body.style.overflow = '';
+  el.setAttribute('aria-hidden', 'true');
+  if (!document.querySelector('.modal-backdrop.open')) {
+    document.body.style.overflow = '';
+  }
+  if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+    lastFocusedElement.focus({ preventScroll: true });
+    lastFocusedElement = null;
+  }
 }
 // wire up all modals: click backdrop / [data-close] to close, Esc key
 document.addEventListener('click', (e) => {
@@ -138,7 +188,7 @@ document.addEventListener('click', (e) => {
 });
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
-    document.querySelectorAll('.modal-backdrop.open').forEach(m => closeModal(m));
+    document.querySelectorAll('.modal-backdrop.open:not([role="alertdialog"])').forEach(m => closeModal(m));
     closeAllMenus();
   }
 });
@@ -208,10 +258,13 @@ window.addEventListener('scroll', closeAllMenus, true);
 window.addEventListener('resize', closeAllMenus);
 
 /* ---------- Confirm dialog (replaces window.confirm) ---------- */
-function confirmDialog(message, { danger = true, confirmText = 'Delete' } = {}) {
+function confirmDialog(message, { danger = true, confirmText = 'Delete', note = 'This action cannot be undone.' } = {}) {
   return new Promise((resolve) => {
     const backdrop = document.createElement('div');
     backdrop.className = 'modal-backdrop open';
+    backdrop.setAttribute('role', 'alertdialog');
+    backdrop.setAttribute('aria-modal', 'true');
+    backdrop.setAttribute('aria-label', message);
     backdrop.innerHTML = `
       <div class="modal" style="max-width:380px">
         <div class="modal-body" style="padding-top:24px">
@@ -219,7 +272,7 @@ function confirmDialog(message, { danger = true, confirmText = 'Delete' } = {}) 
             <span class="ft-icon ${danger ? '' : ''}" style="${danger ? 'color:var(--danger);background:var(--danger-dim);border-color:rgba(248,113,113,.2)' : ''}">${icon('alert')}</span>
             <div>
               <h3 style="margin:2px 0 6px;font-size:15px">${escapeHtml(message)}</h3>
-              <p class="text-2" style="margin:0;font-size:13px">This action cannot be undone.</p>
+              <p class="text-2" style="margin:0;font-size:13px">${escapeHtml(note)}</p>
             </div>
           </div>
         </div>
@@ -230,11 +283,23 @@ function confirmDialog(message, { danger = true, confirmText = 'Delete' } = {}) 
       </div>`;
     document.body.appendChild(backdrop);
     document.body.style.overflow = 'hidden';
+
+    const finish = (value) => {
+      backdrop.remove();
+      document.body.style.overflow = '';
+      document.removeEventListener('keydown', onKey);
+      resolve(value);
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); finish(false); }
+    };
+    document.addEventListener('keydown', onKey);
     backdrop.addEventListener('click', (e) => {
-      if (e.target === backdrop) { backdrop.remove(); document.body.style.overflow = ''; resolve(false); }
+      if (e.target === backdrop) finish(false);
     });
-    backdrop.querySelector('[data-act="cancel"]').onclick = () => { backdrop.remove(); document.body.style.overflow = ''; resolve(false); };
-    backdrop.querySelector('[data-act="ok"]').onclick = () => { backdrop.remove(); document.body.style.overflow = ''; resolve(true); };
+    backdrop.querySelector('[data-act="cancel"]').onclick = () => finish(false);
+    backdrop.querySelector('[data-act="ok"]').onclick = () => finish(true);
+    setTimeout(() => backdrop.querySelector('[data-act="cancel"]').focus(), 40);
   });
 }
 

@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', async () => {
-    if (!getToken()) {
+    if (!getToken() && !getRefreshToken()) {
         window.location.href = '/auth.html';
         return;
     }
@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     $('logo-mark').innerHTML = icon('logo');
 
     let me = null;
+    let plans = [];
 
     function initialsOf(name) {
         return (name || '?').split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
@@ -16,7 +17,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function load() {
         try {
-            me = await apiFetch('/auth/me');
+            [me, plans] = await Promise.all([
+                apiFetch('/auth/me'),
+                apiFetch('/plans/'),
+            ]);
             if (me.role !== 'admin') {
                 window.location.href = '/dashboard.html';
                 return;
@@ -24,7 +28,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             $('sb-avatar').textContent = initialsOf(me.full_name || me.username);
             $('sb-username').textContent = me.full_name || me.username;
 
-            const [users] = await Promise.all([apiFetch('/admin/users')]);
+            const users = await apiFetch('/admin/users');
             renderStats(users);
             renderUsers(users);
         } catch (err) {
@@ -39,11 +43,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     function renderStats(users) {
         const totalStorage = users.reduce((s, u) => s + (u.used_storage || 0), 0);
         const totalFiles = users.reduce((s, u) => s + (u.file_count || 0), 0);
+        const freePlan = plans.find(p => p.price === 0);
         const stats = [
             { label: 'Users', value: users.length, ic: 'users' },
             { label: 'Files stored', value: totalFiles, ic: 'files' },
             { label: 'Total storage used', value: formatBytes(totalStorage), ic: 'drive' },
-            { label: 'Paid plans', value: users.filter(u => u.plan !== 'Free').length, ic: 'zap' },
+            { label: 'Paid plans', value: users.filter(u => u.plan !== (freePlan ? freePlan.name : 'Free')).length, ic: 'zap' },
         ];
         $('stats-row').innerHTML = stats.map(s => `
             <div class="panel px-5 py-4 flex items-center gap-4">
@@ -57,10 +62,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function renderUsers(users) {
         const tbody = $('users-table').querySelector('tbody');
+        if (!users.length) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px" class="text-dim">No users found.</td></tr>`;
+            return;
+        }
         tbody.innerHTML = users.map(u => `
             <tr class="file-row">
                 <td><div class="file-name-cell">
-                    <span class="ft-icon" style="width:30px;height:30px;font-size:11px;font-weight:600;color:var(--accent)">${initialsOf(u.full_name || u.username)}</span>
+                    <span class="ft-icon" style="width:30px;height:30px;font-size:11px;font-weight:600;color:var(--accent)">${escapeHtml(initialsOf(u.full_name || u.username))}</span>
                     <div style="min-width:0">
                         <div class="fname">${escapeHtml(u.full_name || u.username)}${u.role === 'admin' ? ' <span class="badge badge-accent" style="margin-left:6px">admin</span>' : ''}</div>
                         <div class="text-[11.5px] text-dim">@${escapeHtml(u.username)}</div>
@@ -72,10 +81,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <td class="text-mut mono">${formatBytes(u.used_storage)}</td>
                 <td>
                     <div class="flex items-center gap-2">
-                        <select class="select" style="width:auto;padding:5px 28px 5px 10px;font-size:12px" data-plan-user="${u.id}">
-                            ${['Free', 'Pro', 'Premium'].map(p => `<option ${p === u.plan ? 'selected' : ''}>${p}</option>`).join('')}
+                        <select class="select" style="width:auto;padding:5px 28px 5px 10px;font-size:12px" data-plan-user="${u.id}" aria-label="Plan for ${escapeHtml(u.username)}">
+                            ${plans.map(p => `<option value="${escapeHtml(p.name)}" ${p.name === u.plan ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
                         </select>
-                        <button class="icon-action danger" data-del-user="${u.id}" title="Delete user">${icon('trash')}</button>
+                        ${me && u.id === me.id ? '' : `<button class="icon-action danger" data-del-user="${u.id}" title="Delete user" aria-label="Delete ${escapeHtml(u.username)}">${icon('trash')}</button>`}
                     </div>
                 </td>
             </tr>`).join('');
@@ -87,28 +96,33 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const res = await apiFetch(`/admin/users/${sel.dataset.planUser}/plan`, {
                 method: 'PUT',
-                body: JSON.stringify({ plan: sel.value })
+                body: JSON.stringify({ plan: sel.value }),
             });
             toast(res.message, 'success');
             load();
-        } catch (err) { toast(err.message, 'error'); load(); }
+        } catch (err) {
+            toast(err.message, 'error');
+            load();
+        }
     });
 
     document.addEventListener('click', async (e) => {
         const del = e.target.closest('[data-del-user]');
-        if (del) {
-            const ok = await confirmDialog('Delete this user and all their files?', { confirmText: 'Delete user' });
-            if (!ok) return;
-            try {
-                const res = await apiFetch(`/admin/users/${del.dataset.delUser}`, { method: 'DELETE' });
-                toast(res.message, 'success');
-                load();
-            } catch (err) { toast(err.message, 'error'); }
-        }
+        if (!del) return;
+        const ok = await confirmDialog('Delete this user and all their files?', { confirmText: 'Delete user' });
+        if (!ok) return;
+        try {
+            const res = await apiFetch(`/admin/users/${del.dataset.delUser}`, { method: 'DELETE' });
+            toast(res.message, 'success');
+            load();
+        } catch (err) { toast(err.message, 'error'); }
     });
 
     $('btn-reload').addEventListener('click', load);
-    $('btn-logout').addEventListener('click', () => { removeToken(); window.location.href = '/auth.html'; });
+    $('btn-logout').addEventListener('click', async () => {
+        await logout();
+        window.location.href = '/auth.html';
+    });
     document.querySelector('[data-goto="/dashboard.html"]').addEventListener('click', () => {
         window.location.href = '/dashboard.html';
     });

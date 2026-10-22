@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', async () => {
-    if (!getToken()) {
+    if (!getToken() && !getRefreshToken()) {
         window.location.href = '/auth.html';
         return;
     }
@@ -8,16 +8,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     let user = null;
     let view = 'files';
     let currentFolder = null;          // folder id or null (root)
-    let files = [];                    // active files
+    let files = [];                    // active latest files
     let trashFiles = [];
     let folders = [];
+    let plans = [];
     let selection = new Set();
     let searchQ = '';
     let viewMode = localStorage.getItem('storix.viewMode') || 'list';
     let sortMode = 'date-desc';
-    let previewURL = null;             // object URL to revoke
+    let previewURL = null;
+    let previewSeq = 0;
     let previewFileRef = null;
     let shareFileRef = null;
+    let draggingFileIds = [];
 
     /* ---------------- Elements ---------------- */
     const $ = (id) => document.getElementById(id);
@@ -30,21 +33,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     $('logo-mark').innerHTML = icon('logo');
 
     /* ---------------- Data loading ---------------- */
+    async function fetchAllPages(endpoint, pageSize = 1000, maxPages = 10) {
+        const rows = [];
+        for (let page = 0; page < maxPages; page += 1) {
+            const batch = await apiFetch(`${endpoint}?limit=${pageSize}&offset=${page * pageSize}`);
+            rows.push(...batch);
+            if (batch.length < pageSize) break;
+        }
+        return rows;
+    }
+
     async function loadData() {
-        const [me, fs, fds] = await Promise.all([
+        const [me, fs, fds, tr, pl] = await Promise.all([
             apiFetch('/auth/me'),
-            apiFetch('/files/get-files'),
+            fetchAllPages('/files/get-files'),
             apiFetch('/files/folders').catch(() => []),
+            fetchAllPages('/files/trash').catch(() => []),
+            apiFetch('/plans/').catch(() => []),
         ]);
         user = me;
         files = fs;
         folders = fds;
+        trashFiles = tr;
+        plans = pl;
         updateSidebar();
         render();
-    }
-
-    async function loadTrash() {
-        try { trashFiles = await apiFetch('/files/trash'); } catch { trashFiles = []; }
     }
 
     function updateSidebar() {
@@ -58,7 +71,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         badge.className = 'badge badge-accent';
 
         const used = user.used_storage, limit = user.plan.storage_limit;
-        const pct = Math.min((used / limit) * 100, 100);
+        const pct = limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
         const bar = $('sb-bar');
         bar.style.width = `${pct}%`;
         bar.classList.toggle('warn', pct > 75 && pct <= 90);
@@ -69,9 +82,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (user.role === 'admin') $('nav-admin').style.display = 'flex';
 
         const countEl = (n) => n > 0 ? n : '';
-        $('nav-count-shared').textContent = countEl(files.filter(f => f.is_public).length);
+        $('nav-count-public').textContent = countEl(files.filter(f => f.is_public).length);
         $('nav-count-starred').textContent = countEl(files.filter(f => f.is_starred).length);
-        $('nav-count-trash').textContent = trashFiles.length > 0 ? trashFiles.length : '';
+        $('nav-count-trash').textContent = countEl(trashFiles.length);
 
         $('dz-hint').textContent = `Up to ${formatBytes(user.plan.max_file_size)} per file on the ${user.plan.name} plan`;
         if (!user.plan.can_share) {
@@ -83,7 +96,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const VIEW_META = {
         files: { title: 'My Files', sub: () => `Files in ${currentFolderName() || 'root'}` },
         recent: { title: 'Recent', sub: () => 'Most recently uploaded files' },
-        shared: { title: 'Shared', sub: () => 'Files visible to anyone with the link' },
+        public: { title: 'Public', sub: () => 'Files that anyone with the link can see' },
         starred: { title: 'Starred', sub: () => 'Files you marked with a star' },
         trash: { title: 'Trash', sub: () => 'Deleted files — restore them or free the space' },
     };
@@ -97,13 +110,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     function visibleFiles() {
         let list;
         if (view === 'trash') list = trashFiles;
-        else if (view === 'shared') list = files.filter(f => f.is_public);
+        else if (view === 'public') list = files.filter(f => f.is_public);
         else if (view === 'starred') list = files.filter(f => f.is_starred);
         else if (view === 'recent') list = [...files];
         else list = files.filter(f => (currentFolder === null ? f.folder_id == null : f.folder_id === currentFolder));
 
         if (searchQ) {
-            // searching spans every folder
             if (view === 'files') list = [...files];
             const q = searchQ.toLowerCase();
             list = list.filter(f => f.filename.toLowerCase().includes(q));
@@ -115,13 +127,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             'size-asc': (a, b) => a.size - b.size,
             'date-desc': (a, b) => new Date(b.uploaded_at) - new Date(a.uploaded_at),
             'date-asc': (a, b) => new Date(a.uploaded_at) - new Date(b.uploaded_at),
-        }[sortMode] || ((a, b) => 0);
+        }[sortMode] || (() => 0);
         return [...list].sort(cmp);
     }
 
     /* ---------------- Rendering ---------------- */
     function render() {
-        browser.scrollTop = 0; // overflow:hidden panels can still be scrolled programmatically
+        browser.scrollTop = 0;
         const meta = VIEW_META[view];
         $('view-title').textContent = meta.title;
         $('view-sub').textContent = meta.sub();
@@ -130,23 +142,30 @@ document.addEventListener('DOMContentLoaded', async () => {
             btn.classList.toggle('active', btn.dataset.view === view);
         });
 
-        // folder-specific controls
         const isFiles = view === 'files';
         $('btn-new-folder').style.display = isFiles ? 'inline-flex' : 'none';
         $('btn-empty-trash').style.display = view === 'trash' ? 'inline-flex' : 'none';
-        dropzone.style.display = isFiles ? 'block' : 'none';
+        dropzone.style.display = isFiles ? 'flex' : 'none';
         renderCrumbs();
         renderTypeBreakdown();
 
         const list = visibleFiles();
-        $('view-sub').textContent = searchQ ? `${list.length} result${list.length === 1 ? '' : 's'} for "${searchQ}"` : meta.sub();
+        const folderCount = view === 'files' && !searchQ ? visibleFolders().length : 0;
+        if (searchQ) {
+            $('view-sub').textContent = `${list.length} result${list.length === 1 ? '' : 's'} for "${searchQ}"`;
+        } else if (view === 'files') {
+            const parts = [`${list.length} ${list.length === 1 ? 'file' : 'files'}`];
+            if (folderCount) parts.push(`${folderCount} ${folderCount === 1 ? 'folder' : 'folders'}`);
+            $('view-sub').textContent = parts.join(' · ');
+        } else {
+            $('view-sub').textContent = meta.sub();
+        }
 
-        // clear selection entries that are no longer visible
         const visibleIds = new Set(list.map(f => f.id));
         selection.forEach(id => { if (!visibleIds.has(id)) selection.delete(id); });
         updateBulkBar();
 
-        if (list.length === 0) {
+        if (list.length === 0 && folderCount === 0) {
             browser.innerHTML = emptyStateHTML();
             return;
         }
@@ -164,7 +183,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 ? { ic: 'folder', h: 'This folder is empty', p: 'Drop files here or use the upload button.' }
                 : { ic: 'files', h: 'No files yet', p: 'Your workspace is waiting. Upload your first file above.' },
             recent: { ic: 'clock', h: 'Nothing recent', p: 'Files you upload will show up here.' },
-            shared: { ic: 'globe', h: 'Nothing shared', p: 'Mark a file as public or create a share link to see it here.' },
+            public: { ic: 'globe', h: 'Nothing public', p: 'Mark a file as public to see it here.' },
             starred: { ic: 'star', h: 'No starred files', p: 'Star the files you reach for most and they will live here.' },
             trash: { ic: 'trash', h: 'Trash is empty', p: 'Deleted files rest here until you remove them for good.' },
         }[view];
@@ -179,10 +198,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         const crumbs = $('crumbs');
         if (view !== 'files') { crumbs.innerHTML = ''; return; }
         let html = `<button data-crumb="root">My Files</button>`;
-        // build chain up to current folder
         const chain = [];
         let cur = folders.find(f => f.id === currentFolder);
-        while (cur) { chain.unshift(cur); cur = folders.find(f => f.id === cur.parent_id); }
+        const seen = new Set();
+        while (cur && !seen.has(cur.id)) {
+            seen.add(cur.id);
+            chain.unshift(cur);
+            cur = folders.find(f => f.id === cur.parent_id);
+        }
         chain.forEach(f => {
             html += icon('chevronRight');
             html += f.id === currentFolder
@@ -198,31 +221,45 @@ document.addEventListener('DOMContentLoaded', async () => {
             el.style.display = 'none';
             return;
         }
-        const colors = { image: '#60a5fa', video: '#f472b6', audio: '#a78bfa', pdf: '#fb923c', doc: '#fb923c', archive: '#fbbf24', code: '#34d399', other: '#6b7280' };
+        const colors = { image: '#60a5fa', video: '#f472b6', audio: '#a78bfa', pdf: '#fb923c', doc: '#fb923c', archive: '#fbbf24', code: '#34d399', other: '#6b7280', more: '#4b5563' };
         const totals = {};
         files.forEach(f => {
             const t = fileType(f.filename);
             totals[t] = (totals[t] || 0) + f.size;
         });
         const totalBytes = files.reduce((s, f) => s + f.size, 0);
-        const top = Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 4);
+        if (totalBytes <= 0) {
+            el.style.display = 'none';
+            return;
+        }
+
+        const entries = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+        const top = entries.slice(0, 4);
+        const remainder = entries.slice(4).reduce((sum, [, bytes]) => sum + bytes, 0);
+        if (remainder > 0) top.push(['more', remainder]);
+
+        const pct = (bytes) => (bytes / totalBytes * 100).toFixed(1);
+        const label = top.map(([type, bytes]) => `${type} ${formatBytes(bytes)}`).join(', ');
         el.style.display = 'block';
-        el.innerHTML = `<div class="text-[12px] font-medium text-mut mb-3">Storage by type — ${formatBytes(totalBytes)} total</div>` +
-            top.map(([t, bytes]) => `
-                <div class="typebar mb-2" style="max-width:440px">
-                    <span style="width:64px">${t}</span>
-                    <div class="tb-track"><div class="tb-fill" style="width:${(bytes / totalBytes * 100).toFixed(1)}%;background:${colors[t]}"></div></div>
-                    <span class="mono" style="width:70px;text-align:right">${formatBytes(bytes)}</span>
-                </div>`).join('');
+        el.innerHTML = `
+            <div class="type-summary">
+                <span class="type-summary-label">Storage by type <span class="text-dim">· ${formatBytes(totalBytes)}</span></span>
+                <div class="type-stack" role="img" aria-label="Storage by type: ${label}">
+                    ${top.map(([type, bytes]) => `<span style="width:${pct(bytes)}%;background:${colors[type] || colors.more}"></span>`).join('')}
+                </div>
+                <div class="type-legend">
+                    ${top.map(([type, bytes]) => `<span class="type-chip"><i style="background:${colors[type] || colors.more}"></i>${type}<span class="mono type-bytes">${formatBytes(bytes)}</span></span>`).join('')}
+                </div>
+            </div>`;
     }
 
     function starBtnHTML(f) {
-        return `<button class="icon-action star-btn ${f.is_starred ? 'starred' : ''}" data-action="star" data-id="${f.id}" title="${f.is_starred ? 'Unstar' : 'Star'}">
+        return `<button class="icon-action star-btn ${f.is_starred ? 'starred' : ''}" data-action="star" data-id="${f.id}" title="${f.is_starred ? 'Unstar' : 'Star'}" aria-label="${f.is_starred ? 'Unstar' : 'Star'} ${escapeHtml(f.filename)}">
             <svg viewBox="0 0 24 24" fill="${f.is_starred ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS.star}</svg></button>`;
     }
 
     function rowMenuHTML() {
-        return `<button class="icon-action" data-row-menu title="More actions">${icon('more')}</button>`;
+        return `<button class="icon-action" data-row-menu title="More actions" aria-label="More actions">${icon('more')}</button>`;
     }
 
     function fileMenuItems(f) {
@@ -238,10 +275,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             { id: 'download', label: 'Download', icon: 'download', onSelect: () => downloadFile(f) },
             { id: 'versions', label: 'Version history', icon: 'history', onSelect: () => openVersions(f) },
             { sep: true },
-            { id: 'share', label: 'Share…', icon: 'link', onSelect: () => {
+            { id: 'share', label: 'Create share link…', icon: 'link', onSelect: () => {
                 if (!user.plan.can_share) { toast('Sharing requires the Pro plan or above', 'error'); return; }
                 openShare(f);
             } },
+            { id: 'visibility', label: f.is_public ? 'Make private' : 'Make public', icon: 'globe', onSelect: () => toggleVisibility(f) },
             { id: 'rename', label: 'Rename', icon: 'pencil', onSelect: () => openRename(f) },
             { id: 'move', label: 'Move to folder…', icon: 'move', onSelect: () => openMove(f) },
             { sep: true },
@@ -258,21 +296,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         ];
     }
 
-    function folderMenuHTML() {
-        return rowMenuHTML();
-    }
-
     function visibleFolders() {
         if (view !== 'files' || searchQ) return [];
         return folders.filter(f => (f.parent_id ?? null) === currentFolder)
             .sort((a, b) => a.name.localeCompare(b.name));
     }
 
-    function folderListHTML(list) {
+    function folderListHTML() {
         const fdrs = visibleFolders();
         if (!fdrs.length) return '';
-        const rows = fdrs.map(fd => `
-            <tr class="file-row" data-row="${fd.id}">
+        return fdrs.map(fd => `
+            <tr class="file-row" data-kind="folder" data-id="${fd.id}" tabindex="0">
                 <td style="width:36px"></td>
                 <td><div class="file-name-cell">
                     <span class="ft-icon folder">${icon('folder')}</span>
@@ -281,27 +315,26 @@ document.addEventListener('DOMContentLoaded', async () => {
                 </div></td>
                 <td class="text-mut mono col-size" style="width:90px">—</td>
                 <td class="text-mut col-date" style="width:120px">—</td>
-                <td style="width:130px"><div class="row-actions">${folderMenuHTML(fd)}</div></td>
+                <td style="width:130px"><div class="row-actions">${rowMenuHTML()}</div></td>
             </tr>`).join('');
-        return rows;
     }
 
     function renderList(list) {
         const isTrash = view === 'trash';
         const rows = list.map(f => `
-            <tr class="file-row ${selection.has(f.id) ? 'selected' : ''}" data-row="${f.id}">
-                <td style="width:36px"><input type="checkbox" class="cbx row-cbx" data-id="${f.id}" ${selection.has(f.id) ? 'checked' : ''}></td>
+            <tr class="file-row ${selection.has(f.id) ? 'selected' : ''}" data-kind="file" data-id="${f.id}" tabindex="0"${view === 'files' ? ' draggable="true"' : ''}>
+                <td style="width:36px"><input type="checkbox" class="cbx row-cbx" data-id="${f.id}" aria-label="Select ${escapeHtml(f.filename)}" ${selection.has(f.id) ? 'checked' : ''}></td>
                 <td><div class="file-name-cell">
                     ${fileIconEl(f.filename)}
                     <span class="fname" title="${escapeHtml(f.filename)}">${escapeHtml(f.filename)}${f.version > 1 ? ` <span class="badge" style="margin-left:6px">v${f.version}</span>` : ''}</span>
                     ${f.is_public && !isTrash ? `<span class="badge badge-accent" style="margin-left:8px">${icon('globe')}public</span>` : ''}
                 </div></td>
                 <td class="text-mut mono nowrap col-size" style="width:90px">${formatBytes(f.size)}</td>
-                <td class="text-mut nowrap col-date" style="width:120px">${isTrash ? 'deleted ' + formatDate(f.deleted_at) : formatDate(f.uploaded_at)}</td>
+                <td class="text-mut nowrap col-date" style="width:120px" title="${formatAbsoluteDate(isTrash ? f.deleted_at : f.uploaded_at)}">${isTrash ? 'deleted ' + formatDate(f.deleted_at) : formatDate(f.uploaded_at)}</td>
                 <td style="width:130px">
                     <div class="row-actions">
                         ${isTrash ? '' : starBtnHTML(f)}
-                        ${rowMenuHTML(f)}
+                        ${rowMenuHTML()}
                     </div>
                 </td>
             </tr>`).join('');
@@ -315,29 +348,29 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <th class="col-date" style="width:120px">${isTrash ? 'Deleted' : 'Uploaded'}</th>
                     <th style="width:130px"></th>
                 </tr></thead>
-                <tbody>${folderListHTML(list)}${rows}</tbody>
+                <tbody>${folderListHTML()}${rows}</tbody>
             </table>`;
     }
 
     function renderGrid(list) {
         const folderCards = visibleFolders().map(fd => `
-            <div class="file-card" data-row="${fd.id}">
+            <div class="file-card" data-kind="folder" data-id="${fd.id}" tabindex="0">
                 <div class="flex items-start justify-between">
                     <span class="ft-icon folder" style="width:42px;height:42px">${icon('folder')}</span>
-                    <div class="row-actions">${folderMenuHTML(fd)}</div>
+                    <div class="row-actions">${rowMenuHTML()}</div>
                 </div>
                 <div class="card-name" title="${escapeHtml(fd.name)}">${escapeHtml(fd.name)}</div>
                 <div class="text-dim text-[11.5px] mt-0.5">Folder</div>
             </div>`).join('');
         const cards = list.map(f => `
-            <div class="file-card ${selection.has(f.id) ? 'selected' : ''}" data-row="${f.id}">
+            <div class="file-card ${selection.has(f.id) ? 'selected' : ''}" data-kind="file" data-id="${f.id}" tabindex="0"${view === 'files' ? ' draggable="true"' : ''}>
                 <div class="flex items-start justify-between">
                     ${fileIconEl(f.filename)}
-                    <div class="row-actions">${rowMenuHTML(f)}</div>
+                    <div class="row-actions">${rowMenuHTML()}</div>
                 </div>
                 <div class="card-name" title="${escapeHtml(f.filename)}">${escapeHtml(f.filename)}</div>
                 <div class="text-dim text-[11.5px] mt-0.5 mono">${formatBytes(f.size)} · ${formatDate(f.uploaded_at)}</div>
-                <input type="checkbox" class="cbx row-cbx" data-id="${f.id}" style="position:absolute;left:12px;top:12px" ${selection.has(f.id) ? 'checked' : ''}>
+                <input type="checkbox" class="cbx row-cbx" data-id="${f.id}" aria-label="Select ${escapeHtml(f.filename)}" style="position:absolute;right:12px;bottom:12px" ${selection.has(f.id) ? 'checked' : ''}>
             </div>`).join('');
         browser.innerHTML = `<div class="file-grid">${folderCards}${cards}</div>`;
     }
@@ -361,8 +394,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function folderOptionsHTML(selectedId) {
         let html = `<option value="">Workspace root</option>`;
+        const seen = new Set();
         const build = (parentId, depth) => {
             folders.filter(f => (f.parent_id ?? null) === parentId).forEach(f => {
+                if (seen.has(f.id)) return;
+                seen.add(f.id);
                 const sel = f.id === selectedId ? 'selected' : '';
                 html += `<option value="${f.id}" ${sel}>${'— '.repeat(depth)}${escapeHtml(f.name)}</option>`;
                 build(f.id, depth + 1);
@@ -374,7 +410,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     /* ---------------- Actions ---------------- */
     function findFile(id) {
-        return trashFiles.find(f => f.id === id) || files.find(f => f.id === id);
+        return trashFiles.find(f => f.id === id) || files.find(f => f.id === id) || null;
     }
 
     async function downloadFile(f) {
@@ -392,12 +428,34 @@ document.addEventListener('DOMContentLoaded', async () => {
             const active = files.find(x => x.id === f.id);
             if (active) active.is_starred = f.is_starred;
             render();
+            updateSidebar();
             toast(f.is_starred ? 'Added to starred' : 'Removed from starred', 'success', 1600);
         } catch (err) { toast(err.message, 'error'); }
     }
 
+    async function toggleVisibility(f) {
+        if (!user.plan.can_share && !f.is_public) {
+            toast('Public files require the Pro plan or above', 'error');
+            return;
+        }
+        try {
+            const next = !f.is_public;
+            await apiFetch(`/files/${f.id}/visibility`, {
+                method: 'PUT',
+                body: JSON.stringify({ choice: next }),
+            });
+            f.is_public = next;
+            render();
+            updateSidebar();
+            toast(next ? 'File is now public' : 'File is now private', 'success');
+        } catch (err) { toast(err.message, 'error'); }
+    }
+
     async function deleteFile(f) {
-        const ok = await confirmDialog(`Move "${f.filename}" to trash?`);
+        const ok = await confirmDialog(`Move "${f.filename}" to trash?`, {
+            note: 'You can restore it from Trash later.',
+            confirmText: 'Move to trash',
+        });
         if (!ok) return;
         try {
             await apiFetch(`/files/file-delete/${f.id}`, { method: 'DELETE' });
@@ -416,7 +474,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function permDeleteFile(f) {
-        const ok = await confirmDialog(`Permanently delete "${f.filename}"?`, { confirmText: 'Delete forever' });
+        const ok = await confirmDialog(`Permanently delete "${f.filename}" and all its versions?`, {
+            confirmText: 'Delete forever',
+        });
         if (!ok) return;
         try {
             await apiFetch(`/files/permanent-delete/${f.id}`, { method: 'DELETE' });
@@ -450,13 +510,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         const btn = $('btn-create-link');
         btn.disabled = true;
         try {
-            const res = await apiFetch(`/files/share/${shareFileRef.id}?expires_minutes=${minutes}`, { method: 'POST' });
+            const res = await apiFetch(`/files/share/${shareFileRef.id}?expires_minutes=${encodeURIComponent(minutes)}`, { method: 'POST' });
             $('share-link-input').value = res.share_url;
             $('btn-create-link').style.display = 'none';
             const mins = Math.round((new Date(res.expires_at) - Date.now()) / 60000);
-            const expiryText = mins >= 1440 ? `in ${Math.round(mins / 1440)} day${mins >= 2880 ? 's' : ''}`
-                : mins >= 60 ? `in ${Math.round(mins / 60)} hour${mins >= 120 ? 's' : ''}`
-                : `in ${mins} minute${mins === 1 ? '' : 's'}`;
+            const expiryText = mins >= 1440
+                ? `in ${Math.round(mins / 1440)} day${mins >= 2880 ? 's' : ''}`
+                : mins >= 60
+                    ? `in ${Math.round(mins / 60)} hour${mins >= 120 ? 's' : ''}`
+                    : `in ${mins} minute${mins === 1 ? '' : 's'}`;
             toast(`Share link created — expires ${expiryText}`, 'success');
         } catch (err) {
             toast(err.message, 'error');
@@ -477,7 +539,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function saveRename() {
         if (!renameTarget) return;
         try {
-            await apiFetch(`/files/${renameTarget.id}/rename`, { method: 'PUT', body: JSON.stringify({ filename: $('rename-input').value }) });
+            await apiFetch(`/files/${renameTarget.id}/rename`, {
+                method: 'PUT',
+                body: JSON.stringify({ filename: $('rename-input').value }),
+            });
             closeModal($('modal-rename'));
             toast('File renamed', 'success');
             await refreshAll();
@@ -494,18 +559,59 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!moveTarget) return;
         const val = $('move-select').value;
         try {
-            await apiFetch(`/files/${moveTarget.id}/move`, { method: 'PUT', body: JSON.stringify({ folder_id: val ? parseInt(val) : null }) });
+            await apiFetch(`/files/${moveTarget.id}/move`, {
+                method: 'PUT',
+                body: JSON.stringify({ folder_id: val ? parseInt(val, 10) : null }),
+            });
             closeModal($('modal-move'));
             toast('File moved', 'success');
             await refreshAll();
         } catch (err) { toast(err.message, 'error'); }
     }
 
+    function folderLabel(folderId) {
+        if (folderId === null) return 'workspace root';
+        const folder = folders.find(f => f.id === folderId);
+        return folder ? `"${folder.name}"` : 'folder';
+    }
+
+    async function moveFilesToFolder(ids, folderId) {
+        const targets = [...new Set(ids)]
+            .map(id => files.find(f => f.id === id))
+            .filter(f => f && (f.folder_id ?? null) !== folderId);
+        if (!targets.length) return;
+
+        const results = await Promise.allSettled(targets.map(f => apiFetch(`/files/${f.id}/move`, {
+            method: 'PUT',
+            body: JSON.stringify({ folder_id: folderId }),
+        })));
+
+        let moved = 0;
+        results.forEach((result, i) => {
+            if (result.status === 'fulfilled') {
+                targets[i].folder_id = folderId;
+                selection.delete(targets[i].id);
+                moved += 1;
+            }
+        });
+
+        const failed = targets.length - moved;
+        if (moved) {
+            render();
+            updateSidebar();
+        }
+        if (failed) toast(`${moved} moved, ${failed} failed`, 'error');
+        else toast(moved === 1 ? `Moved to ${folderLabel(folderId)}` : `${moved} files moved`, 'success');
+    }
+
     async function createFolder() {
         const name = $('folder-name-input').value.trim();
         if (!name) return;
         try {
-            await apiFetch('/files/folders', { method: 'POST', body: JSON.stringify({ name, parent_id: currentFolder }) });
+            await apiFetch('/files/folders', {
+                method: 'POST',
+                body: JSON.stringify({ name, parent_id: currentFolder }),
+            });
             closeModal($('modal-folder'));
             $('folder-name-input').value = '';
             toast('Folder created', 'success');
@@ -519,7 +625,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const name = prompt('New folder name:', folder.name);
         if (!name || name === folder.name) return;
         try {
-            await apiFetch(`/files/folders/${folderId}/rename`, { method: 'PUT', body: JSON.stringify({ name }) });
+            await apiFetch(`/files/folders/${folderId}/rename`, {
+                method: 'PUT',
+                body: JSON.stringify({ name }),
+            });
             toast('Folder renamed', 'success');
             await refreshAll();
         } catch (err) { toast(err.message, 'error'); }
@@ -527,7 +636,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function deleteFolderFlow(folderId) {
         const folder = folders.find(f => f.id === folderId);
-        const ok = await confirmDialog(`Delete folder "${folder ? folder.name : ''}" and move its files to trash?`);
+        const ok = await confirmDialog(`Delete folder "${folder ? folder.name : ''}" and move its files to trash?`, {
+            note: 'Files inside can be restored from Trash.',
+            confirmText: 'Delete folder',
+        });
         if (!ok) return;
         try {
             const res = await apiFetch(`/files/folders/${folderId}`, { method: 'DELETE' });
@@ -538,17 +650,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     /* ---------------- Preview ---------------- */
+    function revokePreview() {
+        if (previewURL) {
+            URL.revokeObjectURL(previewURL);
+            previewURL = null;
+        }
+    }
+
     function openPreview(f) {
         previewFileRef = f;
+        const sequence = ++previewSeq;
+        revokePreview();
         $('preview-title').textContent = f.filename;
         const stage = $('preview-stage');
         stage.innerHTML = `<div class="spinner"></div>`;
         openModal($('modal-preview'));
 
         const t = fileType(f.filename);
+        const lowerName = f.filename.toLowerCase();
+
         fetchBlob(`/files/preview/${f.id}`).then(blob => {
-            if (previewURL) URL.revokeObjectURL(previewURL);
-            if (t === 'image') {
+            if (sequence !== previewSeq) return;
+            if (t === 'image' && lowerName.endsWith('.svg')) {
+                stage.innerHTML = `<div class="empty-state" style="padding:32px"><div class="empty-icon">${icon('image')}</div>
+                    <h3>SVG preview disabled</h3><p>SVGs can contain active content. Download the file to inspect it safely.</p></div>`;
+            } else if (t === 'image') {
                 previewURL = URL.createObjectURL(blob);
                 stage.innerHTML = `<img src="${previewURL}" alt="">`;
             } else if (t === 'video') {
@@ -559,9 +685,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 stage.innerHTML = `<audio src="${previewURL}" controls autoplay style="width:min(420px,90%)"></audio>`;
             } else if (t === 'pdf') {
                 previewURL = URL.createObjectURL(blob);
-                stage.innerHTML = `<iframe src="${previewURL}"></iframe>`;
-            } else if (blob.size < 1024 * 1024) {
+                stage.innerHTML = `<iframe src="${previewURL}" title="PDF preview"></iframe>`;
+            } else if (isTextFile(f.filename) && blob.size < 1024 * 1024) {
                 blob.text().then(txt => {
+                    if (sequence !== previewSeq) return;
                     stage.innerHTML = `<pre>${escapeHtml(txt.slice(0, 200000))}</pre>`;
                 });
             } else {
@@ -569,6 +696,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <h3>No inline preview</h3><p>Use the download button to get this file.</p></div>`;
             }
         }).catch(err => {
+            if (sequence !== previewSeq) return;
             stage.innerHTML = `<div class="empty-state"><div class="empty-icon">${icon('alert')}</div><h3>Preview failed</h3><p>${escapeHtml(err.message)}</p></div>`;
         });
     }
@@ -591,10 +719,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             list.innerHTML = versions.map(v => `
                 <div class="flex items-center gap-3 px-3 py-2.5" style="border-bottom:1px solid var(--border)">
-                    <span class="ft-icon ${v.is_latest ? '' : ''}" style="width:30px;height:30px">${icon('history')}</span>
+                    <span class="ft-icon" style="width:30px;height:30px">${icon('history')}</span>
                     <div style="flex:1;min-width:0">
                         <div class="text-[13px] font-medium">Version ${v.version} ${v.is_latest ? '<span class="badge badge-accent" style="margin-left:6px">current</span>' : ''}</div>
-                        <div class="text-[11.5px] text-dim mono">${formatBytes(v.size)} · ${formatDate(v.uploaded_at)}</div>
+                        <div class="text-[11.5px] text-dim mono" title="${formatAbsoluteDate(v.uploaded_at)}">${formatBytes(v.size)} · ${formatDate(v.uploaded_at)}</div>
                     </div>
                     ${!v.is_latest ? `<button class="btn btn-sm" data-restore-version="${v.id}">Restore</button>` : ''}
                 </div>`).join('');
@@ -604,33 +732,51 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     /* ---------------- Plans ---------------- */
-    const PLANS = [
-        { name: 'Free', price: 0, storage: '1 GB', perFile: '100 MB', share: false },
-        { name: 'Pro', price: 10, storage: '10 GB', perFile: '1 GB', share: true, tag: 'Most popular' },
-        { name: 'Premium', price: 20, storage: '100 GB', perFile: '10 GB', share: true },
-    ];
-
     function renderPlans() {
-        $('plan-grid').innerHTML = PLANS.map(p => {
+        const grid = $('plan-grid');
+        if (!plans.length) {
+            grid.innerHTML = `<div class="empty-state" style="padding:24px"><h3>Plans unavailable</h3><p>Could not load plan information.</p></div>`;
+            return;
+        }
+        grid.innerHTML = plans.map(p => {
             const isCurrent = user && user.plan.name.toLowerCase() === p.name.toLowerCase();
+            const canSwitch = Boolean(user && user.can_change_plan) && !isCurrent;
+            const tag = p.name.toLowerCase() === 'pro' ? '<span class="plan-tag">Most popular</span>' : '';
             return `
             <div class="plan-card ${isCurrent ? 'current' : ''}">
-                ${p.tag ? `<span class="plan-tag">${p.tag}</span>` : ''}
-                <h3 class="font-semibold mb-1" style="font-size:16px">${p.name}</h3>
+                ${tag}
+                <h3 class="font-semibold mb-1" style="font-size:16px">${escapeHtml(p.name)}</h3>
                 <p class="mb-4"><span class="font-bold" style="font-size:26px;font-family:var(--font-display)">$${p.price}</span><span class="text-dim text-[12px]">/mo</span></p>
                 <ul class="space-y-1.5 text-[13px] text-mut" style="list-style:none;padding:0;margin:0 0 16px">
-                    <li>${p.storage} storage</li>
-                    <li>${p.perFile} max file size</li>
-                    <li>${p.share ? 'Public files & share links' : 'Private files only'}</li>
+                    <li>${formatBytes(p.storage_limit)} storage</li>
+                    <li>${formatBytes(p.max_file_size)} max file size</li>
+                    <li>${p.can_share ? 'Public files & share links' : 'Private files only'}</li>
                 </ul>
                 ${isCurrent
                     ? `<button class="btn w-full" disabled>Current plan</button>`
-                    : `<button class="btn ${p.name === 'Pro' ? 'btn-primary' : ''} w-full" data-select-plan="${p.name}">Switch to ${p.name}</button>`}
+                    : canSwitch
+                        ? `<button class="btn ${p.name.toLowerCase() === 'pro' ? 'btn-primary' : ''} w-full" data-select-plan="${escapeHtml(p.name)}">Switch to ${escapeHtml(p.name)}</button>`
+                        : `<button class="btn w-full" disabled>Admin managed</button>`}
             </div>`;
         }).join('');
+        $('plan-status').textContent = user && !user.can_change_plan
+            ? 'Paid plan changes are managed by an administrator.'
+            : '';
+    }
+
+    async function openPlans() {
+        $('plan-status').textContent = '';
+        try {
+            plans = await apiFetch('/plans/');
+            renderPlans();
+            openModal($('modal-plan'));
+        } catch (err) {
+            toast('Could not load plans: ' + err.message, 'error');
+        }
     }
 
     async function selectPlan(planName) {
+        if (!user || !user.can_change_plan) return;
         const status = $('plan-status');
         status.style.color = 'var(--text-2)';
         status.textContent = `Switching to ${planName}…`;
@@ -639,11 +785,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             status.style.color = 'var(--accent)';
             status.textContent = res.message;
             toast(res.message, 'success');
-            const me = await apiFetch('/auth/me');
+            const [me, pl] = await Promise.all([apiFetch('/auth/me'), apiFetch('/plans/')]);
             user = me;
+            plans = pl;
             updateSidebar();
             renderPlans();
-            setTimeout(() => { closeModal($('modal-plan')); status.textContent = ''; }, 1400);
+            setTimeout(() => {
+                closeModal($('modal-plan'));
+                status.textContent = '';
+            }, 1400);
         } catch (err) {
             status.style.color = 'var(--danger)';
             status.textContent = err.message;
@@ -683,14 +833,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         let succeeded = 0, failed = 0;
         while (uploadQueue.length > 0) {
-            const { file, ui } = uploadQueue.shift();
+            const { file, ui, folderId } = uploadQueue.shift();
             try {
-                const res = await uploadFileWithProgress(file, (p) => ui.setProgress(p), currentFolder);
+                const res = await uploadFileWithProgress(file, (p) => ui.setProgress(p), folderId);
                 if (res.errors && res.errors.length) {
                     ui.fail(res.errors[0].detail);
                     failed++;
                 } else {
-                    ui.done(`Uploaded${res.uploaded && res.uploaded[0] && res.uploaded[0].version > 1 ? ` — v${res.uploaded[0].version}` : ''}`);
+                    const uploaded = res.uploaded && res.uploaded[0];
+                    ui.done(`Uploaded${uploaded && uploaded.version > 1 ? ` — v${uploaded.version}` : ''}`);
                     succeeded++;
                 }
             } catch (err) {
@@ -711,8 +862,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     function queueFiles(fileList) {
         const arr = Array.from(fileList);
         if (!arr.length) return;
+        // Snapshot the destination: navigating during the queue must not move
+        // the remaining files somewhere else.
+        const destination = currentFolder;
         showUploadPanel();
-        arr.forEach(file => uploadQueue.push({ file, ui: addUploadItem(file.name) }));
+        arr.forEach(file => uploadQueue.push({
+            file,
+            folderId: destination,
+            ui: addUploadItem(file.name),
+        }));
         processQueue();
     }
 
@@ -729,10 +887,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function bulkDelete() {
         if (!selection.size) return;
-        const ok = await confirmDialog(`Move ${selection.size} file${selection.size === 1 ? '' : 's'} to trash?`);
+        const count = selection.size;
+        const ok = await confirmDialog(`Move ${count} file${count === 1 ? '' : 's'} to trash?`, {
+            note: 'You can restore them from Trash later.',
+            confirmText: 'Move to trash',
+        });
         if (!ok) return;
         let failed = 0;
-        for (const id of selection) {
+        for (const id of [...selection]) {
             try { await apiFetch(`/files/file-delete/${id}`, { method: 'DELETE' }); }
             catch { failed++; }
         }
@@ -744,32 +906,37 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     /* ---------------- Refresh ---------------- */
     async function refreshAll() {
-        if (view === 'trash') await loadTrash();
         await loadData();
-        if (view === 'trash') { updateSidebar(); render(); }
+    }
+
+    /* ---------------- View routing ---------------- */
+    function applyView(next, { updateHash = true } = {}) {
+        if (!VIEW_META[next]) next = 'files';
+        view = next;
+        currentFolder = null;
+        selection.clear();
+        searchQ = '';
+        $('search-input').value = '';
+        if (updateHash && window.location.hash !== `#${next}`) {
+            window.location.hash = next;
+        }
+        render();
+        closeSidebarMobile();
     }
 
     /* ---------------- Event wiring ---------------- */
-
-    // Sidebar navigation
     document.querySelectorAll('.nav-item[data-view]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            view = btn.dataset.view;
-            currentFolder = null;
-            selection.clear();
-            searchQ = '';
-            $('search-input').value = '';
-            location.hash = view;
-            if (view === 'trash') { loadTrash().then(render); }
-            render();
-            closeSidebarMobile();
-        });
+        btn.addEventListener('click', () => applyView(btn.dataset.view));
     });
     $('nav-admin').addEventListener('click', () => { window.location.href = '/admin.html'; });
 
-    // hash routing on load
-    const hashView = location.hash.replace('#', '');
-    if (VIEW_META[hashView]) view = hashView;
+    window.addEventListener('hashchange', () => {
+        const next = window.location.hash.replace('#', '');
+        if (VIEW_META[next] && next !== view) applyView(next, { updateHash: false });
+    });
+
+    const initialHash = window.location.hash.replace('#', '');
+    if (VIEW_META[initialHash]) view = initialHash;
 
     // Mobile sidebar
     $('btn-menu').addEventListener('click', () => {
@@ -782,14 +949,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         $('scrim').classList.remove('show');
     }
 
-    // Logout
-    $('btn-logout').addEventListener('click', () => {
-        removeToken();
+    $('btn-logout').addEventListener('click', async () => {
+        await logout();
         window.location.href = '/auth.html';
     });
 
     // Plans
-    $('btn-upgrade').addEventListener('click', () => { renderPlans(); openModal($('modal-plan')); });
+    $('btn-upgrade').addEventListener('click', openPlans);
     $('plan-grid').addEventListener('click', (e) => {
         const btn = e.target.closest('[data-select-plan]');
         if (btn) selectPlan(btn.dataset.selectPlan);
@@ -797,7 +963,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Upload
     $('btn-upload').addEventListener('click', () => fileInput.click());
-    dropzone.addEventListener('click', (e) => { if (e.target === dropzone || e.target.closest('p') || e.target.closest('span')) fileInput.click(); });
+    dropzone.addEventListener('click', (e) => {
+        if (e.target === dropzone || e.target.closest('p') || e.target.closest('span')) fileInput.click();
+    });
+    dropzone.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            fileInput.click();
+        }
+    });
     fileInput.addEventListener('change', () => { queueFiles(fileInput.files); fileInput.value = ''; });
     ['dragover', 'dragenter'].forEach(ev => dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.add('dragover'); }));
     ['dragleave', 'drop'].forEach(ev => dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.remove('dragover'); }));
@@ -821,6 +995,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function updateViewModeBtn() {
         $('btn-view-mode').innerHTML = icon(viewMode === 'list' ? 'grid' : 'list');
         $('btn-view-mode').title = viewMode === 'list' ? 'Switch to grid view' : 'Switch to list view';
+        $('btn-view-mode').setAttribute('aria-label', $('btn-view-mode').title);
     }
     $('btn-view-mode').addEventListener('click', () => {
         viewMode = viewMode === 'list' ? 'grid' : 'list';
@@ -835,47 +1010,158 @@ document.addEventListener('DOMContentLoaded', async () => {
     $('crumbs').addEventListener('click', (e) => {
         const btn = e.target.closest('[data-crumb]');
         if (!btn) return;
-        openFolder(btn.dataset.crumb === 'root' ? null : parseInt(btn.dataset.crumb));
+        openFolder(btn.dataset.crumb === 'root' ? null : parseInt(btn.dataset.crumb, 10));
     });
 
-    // Browser delegation: checkbox, row click, actions
+    // Browser delegation
     browser.addEventListener('change', (e) => {
-        if (e.target.classList.contains('row-cbx')) {
-            const id = parseInt(e.target.dataset.id);
-            if (e.target.checked) selection.add(id); else selection.delete(id);
-            const row = e.target.closest('[data-row]');
-            if (row) row.classList.toggle('selected', e.target.checked);
-            updateBulkBar();
-        }
+        if (!e.target.classList.contains('row-cbx')) return;
+        const id = parseInt(e.target.dataset.id, 10);
+        if (e.target.checked) selection.add(id); else selection.delete(id);
+        const row = e.target.closest('[data-kind="file"]');
+        if (row) row.classList.toggle('selected', e.target.checked);
+        updateBulkBar();
+    });
+
+    browser.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        if (e.target.closest('button, input, select, a, textarea')) return;
+        const row = e.target.closest('[data-kind]');
+        if (!row) return;
+        e.preventDefault();
+        row.click();
     });
 
     browser.addEventListener('click', async (e) => {
-        // 3-dots trigger: build the context menu for this row's file/folder
-        const menuTrig = e.target.closest('[data-row-menu]');
-        if (menuTrig) {
+        const starBtn = e.target.closest('[data-action="star"]');
+        if (starBtn) {
             e.stopPropagation();
-            const rowEl = menuTrig.closest('[data-row]');
-            if (!rowEl) return;
-            const id = parseInt(rowEl.dataset.row);
-            const folder = view === 'files' ? folders.find(x => x.id === id) : null;
-            const f = folder ? null : findFile(id);
-            if (!folder && !f) return;
-            openMenuFor(menuTrig, folder ? folderMenuItems(folder) : fileMenuItems(f));
+            const f = findFile(parseInt(starBtn.dataset.id, 10));
+            if (f) toggleStar(f);
             return;
         }
 
-        // row click: open folder or preview file
-        const row = e.target.closest('[data-row]');
-        if (row && !e.target.closest('.cbx') && !e.target.closest('[data-row-menu]')) {
-            const id = parseInt(row.dataset.row);
-            const folder = folders.find(x => x.id === id);
-            if (folder && view === 'files') openFolder(id);
-            else {
+        const menuTrig = e.target.closest('[data-row-menu]');
+        if (menuTrig) {
+            e.stopPropagation();
+            const rowEl = menuTrig.closest('[data-kind]');
+            if (!rowEl) return;
+            const id = parseInt(rowEl.dataset.id, 10);
+            if (rowEl.dataset.kind === 'folder') {
+                const folder = folders.find(x => x.id === id);
+                if (folder) openMenuFor(menuTrig, folderMenuItems(folder));
+            } else {
                 const f = findFile(id);
-                if (f && fileType(f.filename) !== 'other') openPreview(f);
+                if (f) openMenuFor(menuTrig, fileMenuItems(f));
+            }
+            return;
+        }
+
+        const row = e.target.closest('[data-kind]');
+        if (row && !e.target.closest('.cbx') && !e.target.closest('[data-row-menu]')) {
+            const id = parseInt(row.dataset.id, 10);
+            if (row.dataset.kind === 'folder') {
+                if (view === 'files') openFolder(id);
+            } else {
+                const f = findFile(id);
+                if (f) openPreview(f);
             }
         }
     });
+
+    // Drag files onto a folder row to move them in, or onto "My Files" to move
+    // them back out to the root.
+    function dragFileIds(e) {
+        try {
+            const raw = e.dataTransfer.getData('application/x-storix-files');
+            const parsed = raw ? JSON.parse(raw) : null;
+            if (Array.isArray(parsed?.ids)) {
+                return parsed.ids.map(id => parseInt(id, 10)).filter(Number.isFinite);
+            }
+        } catch { /* fall through to the local drag state */ }
+        return [...draggingFileIds];
+    }
+
+    function clearDragState() {
+        document.querySelectorAll('.dragging, .drop-target-active').forEach(el => {
+            el.classList.remove('dragging', 'drop-target-active');
+        });
+        document.body.classList.remove('dragging-files');
+        draggingFileIds = [];
+    }
+
+    browser.addEventListener('dragstart', (e) => {
+        if (view !== 'files') { e.preventDefault(); return; }
+        const row = e.target.closest('[data-kind="file"]');
+        if (!row || e.target.closest('button, input, a, select')) { e.preventDefault(); return; }
+        const id = parseInt(row.dataset.id, 10);
+        const ids = selection.has(id) ? [...selection] : [id];
+        draggingFileIds = ids;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('application/x-storix-files', JSON.stringify({ ids }));
+        e.dataTransfer.setData('text/plain', ids.map(fileId => {
+            const f = files.find(x => x.id === fileId);
+            return f ? f.filename : String(fileId);
+        }).join(', '));
+        row.classList.add('dragging');
+        document.body.classList.add('dragging-files');
+    });
+
+    browser.addEventListener('dragend', clearDragState);
+
+    browser.addEventListener('dragover', (e) => {
+        if (view !== 'files') return;
+        const folderRow = e.target.closest('[data-kind="folder"]');
+        if (!folderRow) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        folderRow.classList.add('drop-target-active');
+    });
+
+    browser.addEventListener('dragleave', (e) => {
+        const folderRow = e.target.closest('[data-kind="folder"]');
+        if (folderRow && !folderRow.contains(e.relatedTarget)) {
+            folderRow.classList.remove('drop-target-active');
+        }
+    });
+
+    browser.addEventListener('drop', (e) => {
+        const folderRow = e.target.closest('[data-kind="folder"]');
+        if (!folderRow) return;
+        e.preventDefault();
+        const ids = dragFileIds(e);
+        clearDragState();
+        if (ids.length) moveFilesToFolder(ids, parseInt(folderRow.dataset.id, 10));
+    });
+
+    function wireRootDropTarget(el) {
+        el.addEventListener('dragover', (e) => {
+            if (view !== 'files' || currentFolder === null) return;
+            const rootCrumb = el.id === 'crumbs' ? e.target.closest('[data-crumb="root"]') : el;
+            if (!rootCrumb) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            rootCrumb.classList.add('drop-target-active');
+        });
+        el.addEventListener('dragleave', (e) => {
+            const rootCrumb = el.id === 'crumbs' ? e.target.closest('[data-crumb="root"]') : el;
+            if (rootCrumb && !rootCrumb.contains(e.relatedTarget)) {
+                rootCrumb.classList.remove('drop-target-active');
+            }
+        });
+        el.addEventListener('drop', (e) => {
+            if (view !== 'files' || currentFolder === null) return;
+            const rootCrumb = el.id === 'crumbs' ? e.target.closest('[data-crumb="root"]') : el;
+            if (!rootCrumb) return;
+            e.preventDefault();
+            const ids = dragFileIds(e);
+            clearDragState();
+            if (ids.length) moveFilesToFolder(ids, null);
+        });
+    }
+
+    wireRootDropTarget($('crumbs'));
+    wireRootDropTarget($('nav-files'));
 
     // Modals
     $('btn-create-link').addEventListener('click', createShareLink);
@@ -893,15 +1179,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     $('btn-new-folder').addEventListener('click', () => { $('folder-name-input').value = ''; openModal($('modal-folder')); });
     $('btn-empty-trash').addEventListener('click', emptyTrash);
     $('btn-preview-download').addEventListener('click', () => { if (previewFileRef) downloadFile(previewFileRef); });
-    $('modal-preview').addEventListener('click', () => {
-        if (previewURL) { URL.revokeObjectURL(previewURL); previewURL = null; }
-    });
+
+    // Revoke preview object URLs only when the preview closes, never on
+    // playback controls or the download button.
     $('modal-preview').addEventListener('click', (e) => {
-        // revoke when closed via backdrop/close button
         if (e.target.classList.contains('modal-backdrop') || e.target.closest('[data-close]')) {
-            if (previewURL) { URL.revokeObjectURL(previewURL); previewURL = null; }
+            previewSeq++;
+            revokePreview();
         }
     });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && $('modal-preview').classList.contains('open')) {
+            previewSeq++;
+            revokePreview();
+        }
+    });
+    window.addEventListener('beforeunload', revokePreview);
 
     // Bulk
     $('btn-bulk-zip').addEventListener('click', bulkZip);
@@ -922,7 +1215,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     /* ---------------- Init ---------------- */
     try {
-        await loadTrash();
         await loadData();
     } catch (err) {
         toast('Failed to load workspace: ' + err.message, 'error', 6000);

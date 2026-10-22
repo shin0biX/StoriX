@@ -12,7 +12,7 @@
             line: 'rgba(255,255,255,0.07)', lineS: 'rgba(255,255,255,0.13)', acc: '#34d399',
         }}}}
     </script>
-    <link rel="stylesheet" href="/css/app.css?v=3">
+    <link rel="stylesheet" href="/css/app.css?v=8">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -20,14 +20,14 @@
 
     <!-- Sidebar -->
     <aside class="sidebar" id="sidebar">
-        <div class="nav-section" style="padding:18px 16px 10px">
+        <div class="nav-section" style="padding:16px 14px 8px">
             <a href="/" class="logo text-[17px]"><span class="logo-mark" id="logo-mark"></span>StoriX</a>
         </div>
 
         <nav class="nav-section">
             <button class="nav-item active" data-view="files" id="nav-files"><span class="nav-ic" data-ic="files"></span>My Files</button>
             <button class="nav-item" data-view="recent"><span class="nav-ic" data-ic="clock"></span>Recent</button>
-            <button class="nav-item" data-view="shared"><span class="nav-ic" data-ic="globe"></span>Shared<span class="nav-count" id="nav-count-shared"></span></button>
+            <button class="nav-item" data-view="public"><span class="nav-ic" data-ic="globe"></span>Public<span class="nav-count" id="nav-count-public"></span></button>
             <button class="nav-item" data-view="starred"><span class="nav-ic" data-ic="star"></span>Starred<span class="nav-count" id="nav-count-starred"></span></button>
             <button class="nav-item" data-view="trash"><span class="nav-ic" data-ic="trash"></span>Trash<span class="nav-count" id="nav-count-trash"></span></button>
             <button class="nav-item" data-goto="/admin.html" id="nav-admin" style="display:none"><span class="nav-ic" data-ic="users"></span>Admin</button>
@@ -46,18 +46,18 @@
                 <span id="sb-used">0 B</span>
                 <span id="sb-limit">0 B</span>
             </div>
-            <button class="btn btn-sm w-full mt-3" id="btn-upgrade"><span data-ic="zap"></span>Change plan</button>
+            <button class="btn btn-sm w-full mt-2.5" id="btn-upgrade"><span data-ic="zap"></span>Change plan</button>
         </div>
 
         <!-- User -->
-        <div class="nav-section" style="border-top:1px solid var(--border);padding:12px 16px">
+        <div class="nav-section" style="border-top:1px solid var(--border);padding:10px 14px">
             <div class="flex items-center gap-3">
                 <div id="sb-avatar" style="width:32px;height:32px;border-radius:999px;background:var(--elevated);border:1px solid var(--border-strong);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--accent);flex:none">—</div>
                 <div style="min-width:0;flex:1">
                     <div id="sb-username" class="text-[13px] font-medium" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Loading…</div>
                     <div class="text-[11px] text-dim" id="sb-plan-name"></div>
                 </div>
-                <button class="icon-action" id="btn-logout" title="Log out" data-ic="logout"></button>
+                <button class="icon-action" id="btn-logout" title="Log out" aria-label="Log out" data-ic="logout"></button>
             </div>
         </div>
     </aside>
@@ -66,11 +66,11 @@
     <!-- Main -->
     <div class="app-main">
         <div class="topbar">
-            <button class="btn btn-ghost btn-icon sidebar-toggle" id="btn-menu" data-ic="menu"></button>
+            <button class="btn btn-ghost btn-icon sidebar-toggle" id="btn-menu" title="Open navigation" aria-label="Open navigation" data-ic="menu"></button>
             <div class="search-box" style="width:min(380px,100%)">
                 <span data-ic="search"></span>
-                <input class="input" id="search-input" type="text" placeholder="Search files…" autocomplete="off">
-                <kbd>/</kbd>
+                <input class="input" id="search-input" type="search" placeholder="Search files…" aria-label="Search files" autocomplete="off">
+                <kbd aria-hidden="true">/</kbd>
             </div>
             <div style="flex:1"></div>
             <button class="btn btn-primary" id="btn-upload"><span data-ic="upload"></span>Upload</button>
@@ -78,13 +78,13 @@
 
         <div class="content-scroll">
             <!-- Toolbar -->
-            <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <div>
                     <h1 class="font-semibold" style="font-size:21px;margin:0" id="view-title">My Files</h1>
-                    <p class="text-dim text-[12.5px] m-0 mt-0.5" id="view-sub"></p>
+                    <p class="text-dim text-[12.5px] m-0 mt-0.5" id="view-sub" aria-live="polite"></p>
                 </div>
                 <div class="flex items-center gap-2" id="toolbar-main">
-                    <select class="select" id="sort-select" style="width:auto;padding:7px 30px 7px 12px">
+                    <select class="select" id="sort-select" aria-label="Sort files" style="width:auto;padding:7px 30px 7px 12px">
                         <option value="date-desc">Newest first</option>
                         <option value="date-asc">Oldest first</option>
                         <option value="name">Name A–Z</option>
@@ -114,18 +114,20 @@
             </div>
 
             <!-- Storage by type -->
-            <div class="panel px-5 py-4 mb-5" id="type-breakdown" style="display:none"></div>
+            <div class="panel type-summary-panel mb-3" id="type-breakdown" style="display:none"></div>
 
             <!-- Dropzone -->
-            <div class="dropzone mb-5" id="dropzone">
-                <span style="display:inline-flex" data-ic="upload"></span>
-                <p class="m-0 text-[13.5px]"><span class="font-medium" style="color:var(--text)">Drop files here</span> or click to browse — multiple files supported</p>
-                <p class="m-0 text-[11.5px] mt-1" id="dz-hint"></p>
+            <div class="dropzone mb-3" id="dropzone" role="button" tabindex="0" aria-label="Upload files">
+                <span class="dz-icon" data-ic="upload"></span>
+                <div class="dz-copy">
+                    <p class="m-0 text-[13px]"><span class="font-medium" style="color:var(--text)">Drop files here</span> or click to browse<span class="dz-multi"> — multiple files supported</span></p>
+                    <p class="m-0 text-[11.5px]" id="dz-hint"></p>
+                </div>
                 <input type="file" id="file-input" multiple style="display:none">
             </div>
 
             <!-- Browser -->
-            <div id="browser" class="panel view-fade" style="min-height:280px;overflow:hidden"></div>
+            <div id="browser" class="panel view-fade" style="min-height:280px;overflow:clip"></div>
         </div>
     </div>
 </div>
@@ -134,26 +136,27 @@
 <div class="upload-panel" id="upload-panel" style="display:none">
     <div class="up-head">
         <span id="upload-title">Uploading…</span>
-        <button class="icon-action" id="btn-upload-close" style="display:none" data-ic="x"></button>
+        <button class="icon-action" id="btn-upload-close" style="display:none" title="Dismiss uploads" aria-label="Dismiss uploads" data-ic="x"></button>
     </div>
     <div id="upload-list" style="max-height:280px;overflow-y:auto"></div>
 </div>
 
 <!-- Share modal -->
-<div class="modal-backdrop" id="modal-share">
+<div class="modal-backdrop" id="modal-share" role="dialog" aria-modal="true" aria-labelledby="share-title" aria-hidden="true">
     <div class="modal" style="max-width:460px">
-        <div class="modal-head"><h3>Share file</h3><button class="btn btn-ghost btn-icon" data-close data-ic="x"></button></div>
+        <div class="modal-head"><h3 id="share-title">Create share link</h3><button class="btn btn-ghost btn-icon" data-close data-ic="x"></button></div>
         <div class="modal-body">
             <label class="field-label">Link expires in</label>
             <select class="select mb-4" id="share-expiry">
                 <option value="30">30 minutes</option>
                 <option value="60">1 hour</option>
                 <option value="1440">24 hours</option>
+                <option value="10080">7 days</option>
             </select>
             <label class="field-label">Share link</label>
             <div class="flex gap-2">
                 <input class="input mono" id="share-link-input" readonly placeholder="Create a link to continue">
-                <button class="btn btn-icon" id="btn-copy-link" title="Copy" data-ic="copy"></button>
+                <button class="btn btn-icon" id="btn-copy-link" title="Copy link" aria-label="Copy share link" data-ic="copy"></button>
             </div>
             <p class="text-dim text-[12px] mt-2.5 m-0" id="share-file-name"></p>
         </div>
@@ -165,9 +168,9 @@
 </div>
 
 <!-- Rename modal -->
-<div class="modal-backdrop" id="modal-rename">
+<div class="modal-backdrop" id="modal-rename" role="dialog" aria-modal="true" aria-labelledby="rename-title" aria-hidden="true">
     <div class="modal" style="max-width:400px">
-        <div class="modal-head"><h3>Rename</h3><button class="btn btn-ghost btn-icon" data-close data-ic="x"></button></div>
+        <div class="modal-head"><h3 id="rename-title">Rename</h3><button class="btn btn-ghost btn-icon" data-close data-ic="x"></button></div>
         <div class="modal-body">
             <label class="field-label">New name</label>
             <input class="input" id="rename-input" autocomplete="off">
@@ -180,9 +183,9 @@
 </div>
 
 <!-- Move modal -->
-<div class="modal-backdrop" id="modal-move">
+<div class="modal-backdrop" id="modal-move" role="dialog" aria-modal="true" aria-labelledby="move-title" aria-hidden="true">
     <div class="modal" style="max-width:400px">
-        <div class="modal-head"><h3>Move file</h3><button class="btn btn-ghost btn-icon" data-close data-ic="x"></button></div>
+        <div class="modal-head"><h3 id="move-title">Move file</h3><button class="btn btn-ghost btn-icon" data-close data-ic="x"></button></div>
         <div class="modal-body">
             <label class="field-label">Destination folder</label>
             <select class="select" id="move-select"></select>
@@ -195,9 +198,9 @@
 </div>
 
 <!-- New folder modal -->
-<div class="modal-backdrop" id="modal-folder">
+<div class="modal-backdrop" id="modal-folder" role="dialog" aria-modal="true" aria-labelledby="folder-title" aria-hidden="true">
     <div class="modal" style="max-width:400px">
-        <div class="modal-head"><h3>New folder</h3><button class="btn btn-ghost btn-icon" data-close data-ic="x"></button></div>
+        <div class="modal-head"><h3 id="folder-title">New folder</h3><button class="btn btn-ghost btn-icon" data-close data-ic="x"></button></div>
         <div class="modal-body">
             <label class="field-label">Folder name</label>
             <input class="input" id="folder-name-input" placeholder="e.g. Projects" autocomplete="off">
@@ -210,9 +213,9 @@
 </div>
 
 <!-- Plan modal -->
-<div class="modal-backdrop" id="modal-plan">
+<div class="modal-backdrop" id="modal-plan" role="dialog" aria-modal="true" aria-labelledby="plan-title" aria-hidden="true">
     <div class="modal" style="max-width:760px">
-        <div class="modal-head"><h3>Choose your plan</h3><button class="btn btn-ghost btn-icon" data-close data-ic="x"></button></div>
+        <div class="modal-head"><h3 id="plan-title">Choose your plan</h3><button class="btn btn-ghost btn-icon" data-close data-ic="x"></button></div>
         <div class="modal-body">
             <div class="grid md:grid-cols-3 gap-4" id="plan-grid"></div>
             <p class="text-center text-[12.5px] mt-4 mb-0" id="plan-status"></p>
@@ -221,7 +224,7 @@
 </div>
 
 <!-- Preview modal -->
-<div class="modal-backdrop" id="modal-preview">
+<div class="modal-backdrop" id="modal-preview" role="dialog" aria-modal="true" aria-labelledby="preview-title" aria-hidden="true">
     <div class="modal" style="max-width:860px;height:calc(100vh - 60px)">
         <div class="modal-head">
             <h3 id="preview-title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%"></h3>
@@ -235,15 +238,15 @@
 </div>
 
 <!-- Versions modal -->
-<div class="modal-backdrop" id="modal-versions">
+<div class="modal-backdrop" id="modal-versions" role="dialog" aria-modal="true" aria-labelledby="versions-title" aria-hidden="true">
     <div class="modal" style="max-width:480px">
         <div class="modal-head"><h3 id="versions-title">Version history</h3><button class="btn btn-ghost btn-icon" data-close data-ic="x"></button></div>
         <div class="modal-body" id="versions-list" style="padding:10px"></div>
     </div>
 </div>
 
-<script src="/js/ui.js?v=3"></script>
-<script src="/js/api.js?v=2"></script>
-<script src="/js/dashboard.js?v=6"></script>
+<script src="/js/ui.js?v=4"></script>
+<script src="/js/api.js?v=3"></script>
+<script src="/js/dashboard.js?v=13"></script>
 </body>
 </html>

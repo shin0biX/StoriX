@@ -12,7 +12,7 @@
             line: 'rgba(255,255,255,0.07)', acc: '#34d399',
         }}}}
     </script>
-    <link rel="stylesheet" href="/css/app.css?v=3">
+    <link rel="stylesheet" href="/css/app.css?v=8">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -27,63 +27,64 @@
 
             <div class="auth-card">
                 <!-- Login -->
-                <div id="login-form">
+                <form id="login-form">
                     <h1 class="font-semibold mb-1" style="font-size:20px">Welcome back</h1>
                     <p class="text-mut text-[13.5px] mb-6">Sign in to your workspace.</p>
                     <div class="space-y-4">
                         <div>
                             <label class="field-label" for="login-username">Username</label>
-                            <input class="input" type="text" id="login-username" placeholder="Enter your username" autocomplete="username">
+                            <input class="input" type="text" id="login-username" placeholder="Enter your username" autocomplete="username" required>
                         </div>
                         <div>
                             <label class="field-label" for="login-password">Password</label>
-                            <input class="input" type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
+                            <input class="input" type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" required>
                         </div>
-                        <div id="login-error" class="badge badge-danger hidden" style="display:none"></div>
-                        <button id="login-btn" class="btn btn-primary w-full" style="padding:10px">Sign In</button>
+                        <div id="login-error" class="badge badge-danger" role="alert" style="display:none"></div>
+                        <button id="login-btn" type="submit" class="btn btn-primary w-full" style="padding:10px">Sign In</button>
                     </div>
                     <p class="text-center text-mut text-[13px] mt-6">
                         Don't have an account? <a href="#" id="show-register">Create one</a>
                     </p>
-                </div>
+                </form>
 
                 <!-- Register -->
-                <div id="register-form" style="display:none">
+                <form id="register-form" style="display:none">
                     <h1 class="font-semibold mb-1" style="font-size:20px">Create your account</h1>
                     <p class="text-mut text-[13.5px] mb-6">Start with 1 GB of free storage.</p>
                     <div class="space-y-4">
                         <div>
                             <label class="field-label" for="reg-fullname">Full name</label>
-                            <input class="input" type="text" id="reg-fullname" placeholder="John Doe" autocomplete="name">
+                            <input class="input" type="text" id="reg-fullname" placeholder="John Doe" autocomplete="name" maxlength="120" required>
                         </div>
                         <div>
                             <label class="field-label" for="reg-email">Email</label>
-                            <input class="input" type="email" id="reg-email" placeholder="john@example.com" autocomplete="email">
+                            <input class="input" type="email" id="reg-email" placeholder="john@example.com" autocomplete="email" maxlength="320" required>
                         </div>
                         <div>
                             <label class="field-label" for="reg-username">Username</label>
-                            <input class="input" type="text" id="reg-username" placeholder="johndoe" autocomplete="username">
+                            <input class="input" type="text" id="reg-username" placeholder="johndoe" autocomplete="username" pattern="[A-Za-z0-9][A-Za-z0-9_.-]{2,31}" maxlength="32" required>
+                            <p class="text-dim text-[11.5px] mt-1.5 mb-0">3–32 characters; letters, numbers, dots, hyphens, underscores.</p>
                         </div>
                         <div>
                             <label class="field-label" for="reg-password">Password</label>
-                            <input class="input" type="password" id="reg-password" placeholder="••••••••" autocomplete="new-password">
+                            <input class="input" type="password" id="reg-password" placeholder="At least 8 characters" autocomplete="new-password" minlength="8" maxlength="128" required>
                         </div>
-                        <div id="register-error" class="badge badge-danger" style="display:none"></div>
-                        <div id="register-success" class="badge badge-accent" style="display:none">Registration successful! You can now sign in.</div>
-                        <button id="register-btn" class="btn btn-primary w-full" style="padding:10px">Sign Up</button>
+                        <div id="register-error" class="badge badge-danger" role="alert" style="display:none"></div>
+                        <div id="register-success" class="badge badge-accent" role="status" style="display:none">Registration successful! You can now sign in.</div>
+                        <button id="register-btn" type="submit" class="btn btn-primary w-full" style="padding:10px">Sign Up</button>
                     </div>
                     <p class="text-center text-mut text-[13px] mt-6">
                         Already have an account? <a href="#" id="show-login">Sign in</a>
                     </p>
-                </div>
+                </form>
             </div>
 
             <p class="text-center text-dim text-[12px] mt-5"><a href="/" style="color:var(--text-3)">← Back to home</a></p>
         </div>
     </div>
 
-    <script src="/js/ui.js?v=3"></script>
-    <script src="/js/api.js?v=2"></script>
+    <script src="/js/ui.js?v=4"></script>
+    <script src="/js/api.js?v=3"></script>
     <script src="/js/auth.js?v=2"></script>
     <script>document.getElementById('logo-mark').innerHTML = icon('logo');</script>
 </body>

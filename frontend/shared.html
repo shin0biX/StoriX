@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shared file — StoriX</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/css/app.css?v=3">
+    <link rel="stylesheet" href="/css/app.css?v=8">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -22,7 +22,7 @@
                 <div class="empty-state" style="padding:8px 0 18px">
                     <div class="empty-icon" id="share-icon" style="margin:0 auto 14px;width:56px;height:56px;border-radius:16px"></div>
                     <h3 id="status-title" style="font-size:17px">Shared file</h3>
-                    <p id="status-message" style="margin-top:4px">Preparing your secure download…</p>
+                    <p id="status-message" role="status" aria-live="polite" style="margin-top:4px">Preparing your secure download…</p>
                 </div>
                 <button id="download-btn" class="btn btn-primary w-full" style="padding:11px;display:none">
                     <span id="dl-ic"></span> Download file
@@ -32,8 +32,8 @@
         </div>
     </div>
 
-    <script src="/js/ui.js?v=3"></script>
-    <script src="/js/api.js?v=2"></script>
+    <script src="/js/ui.js?v=4"></script>
+    <script src="/js/api.js?v=3"></script>
     <script>
         document.getElementById('logo-mark').innerHTML = icon('logo');
         document.getElementById('share-icon').innerHTML = icon('share');
@@ -43,10 +43,10 @@
         const statusMsg = document.getElementById('status-message');
         const downloadBtn = document.getElementById('download-btn');
 
-        const isPagePath = window.location.pathname.endsWith('shared.html');
-        const queryToken = new URLSearchParams(window.location.search).get('token');
-        const pathToken = window.location.pathname.split('/').filter(Boolean).pop();
-        const token = isPagePath ? queryToken : (pathToken || queryToken);
+        // Share URLs are always /shared.html?token=…; never treat a path
+        // segment as a token, because /shared.html itself would then look
+        // like one.
+        const token = new URLSearchParams(window.location.search).get('token');
 
         if (!token) {
             statusTitle.textContent = 'Invalid link';
@@ -62,16 +62,23 @@
             statusMsg.style.color = 'var(--text-2)';
             statusMsg.textContent = 'Downloading…';
             try {
-                const res = await fetch(`/files/shared/${token}`);
+                const res = await fetch(`/files/shared/${encodeURIComponent(token)}`, {
+                    headers: { Accept: 'application/octet-stream' },
+                });
                 if (!res.ok) {
-                    let detail = 'This link is invalid or has expired.';
-                    try { const j = await res.json(); if (j.detail) detail = j.detail; } catch {}
+                    let detail = res.status === 401
+                        ? 'This link has expired.'
+                        : res.status === 403
+                            ? 'Sharing is no longer available for this file.'
+                            : 'This link is invalid or the file was removed.';
+                    try {
+                        const body = await res.json();
+                        if (body && typeof body.detail === 'string') detail = body.detail;
+                    } catch {}
                     throw new Error(detail);
                 }
                 const blob = await res.blob();
-                const cd = res.headers.get('content-disposition') || '';
-                let filename = 'shared-file';
-                if (cd.includes('filename=')) filename = cd.split('filename=')[1].replace(/"/g, '');
+                const filename = parseDispositionFilename(res.headers.get('content-disposition')) || 'shared-file';
                 saveBlob(blob, filename);
                 statusTitle.textContent = 'Downloaded';
                 statusMsg.style.color = 'var(--accent)';

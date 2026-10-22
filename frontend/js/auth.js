@@ -1,48 +1,76 @@
-document.addEventListener('DOMContentLoaded', () => {
-    // If already logged in, go straight to the workspace
+document.addEventListener('DOMContentLoaded', async () => {
     if (getToken()) {
+        window.location.href = '/dashboard.html';
+        return;
+    }
+    // An expired access token may still have a valid refresh token; try it
+    // before showing the sign-in form again.
+    if (getRefreshToken() && await tryRefreshToken()) {
         window.location.href = '/dashboard.html';
         return;
     }
 
     const loginForm = document.getElementById('login-form');
     const registerForm = document.getElementById('register-form');
+    const loginError = document.getElementById('login-error');
+    const registerError = document.getElementById('register-error');
+    const registerSuccess = document.getElementById('register-success');
+
+    const params = new URLSearchParams(window.location.search);
+    const next = params.get('next');
+    const nextUrl = next && next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard.html';
 
     function showError(el, message) {
         el.textContent = message;
-        el.style.display = 'inline-flex';
-    }
-    function hideError(el) {
-        el.style.display = 'none';
+        el.style.display = 'block';
     }
 
-    // Toggle forms
+    function hideError(el) {
+        el.style.display = 'none';
+        el.textContent = '';
+    }
+
+    function setBusy(button, busy, label) {
+        button.disabled = busy;
+        if (busy) {
+            button.dataset.label = button.textContent;
+            button.textContent = label;
+        } else if (button.dataset.label) {
+            button.textContent = button.dataset.label;
+            delete button.dataset.label;
+        }
+    }
+
     document.getElementById('show-register').addEventListener('click', (e) => {
         e.preventDefault();
         loginForm.style.display = 'none';
         registerForm.style.display = 'block';
+        hideError(loginError);
+        document.getElementById('reg-fullname').focus();
     });
 
     document.getElementById('show-login').addEventListener('click', (e) => {
         e.preventDefault();
         registerForm.style.display = 'none';
         loginForm.style.display = 'block';
+        hideError(registerError);
+        registerSuccess.style.display = 'none';
+        document.getElementById('login-username').focus();
     });
 
-    // Login
-    document.getElementById('login-btn').addEventListener('click', async () => {
+    loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
         const username = document.getElementById('login-username').value.trim();
         const password = document.getElementById('login-password').value;
-        const errorEl = document.getElementById('login-error');
-        const btn = document.getElementById('login-btn');
-        hideError(errorEl);
+        const button = document.getElementById('login-btn');
+        hideError(loginError);
 
         if (!username || !password) {
-            showError(errorEl, 'Please fill in all fields');
+            showError(loginError, 'Please fill in all fields');
             return;
         }
 
-        btn.disabled = true;
+        setBusy(button, true, 'Signing in…');
         try {
             const formData = new URLSearchParams();
             formData.append('username', username);
@@ -51,59 +79,68 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await apiFetch('/auth/token', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: formData.toString()
+                body: formData.toString(),
             });
-
-            setToken(res.access_token);
-            window.location.href = '/dashboard.html';
+            setTokens(res);
+            window.location.href = nextUrl;
         } catch (err) {
-            showError(errorEl, err.message);
+            showError(loginError, err.message);
         } finally {
-            btn.disabled = false;
+            setBusy(button, false);
         }
     });
 
-    // Register
-    document.getElementById('register-btn').addEventListener('click', async () => {
+    registerForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
         const fullname = document.getElementById('reg-fullname').value.trim();
         const email = document.getElementById('reg-email').value.trim();
         const username = document.getElementById('reg-username').value.trim();
         const password = document.getElementById('reg-password').value;
+        const button = document.getElementById('register-btn');
 
-        const errorEl = document.getElementById('register-error');
-        const successEl = document.getElementById('register-success');
-        const btn = document.getElementById('register-btn');
-
-        hideError(errorEl);
-        successEl.style.display = 'none';
+        hideError(registerError);
+        registerSuccess.style.display = 'none';
 
         if (!fullname || !email || !username || !password) {
-            showError(errorEl, 'Please fill in all fields');
+            showError(registerError, 'Please fill in all fields');
+            return;
+        }
+        if (password.length < 8) {
+            showError(registerError, 'Password must be at least 8 characters');
             return;
         }
 
-        btn.disabled = true;
+        setBusy(button, true, 'Creating account…');
         try {
             await apiFetch('/auth/', {
                 method: 'POST',
                 body: JSON.stringify({
                     full_name: fullname,
-                    email: email,
-                    username: username,
-                    password: password,
-                    plan_id: 1 // Free plan
-                })
+                    email,
+                    username,
+                    password,
+                }),
             });
 
-            successEl.style.display = 'inline-flex';
+            registerSuccess.style.display = 'block';
+            document.getElementById('login-username').value = username;
             setTimeout(() => {
-                document.getElementById('show-login').click();
+                registerForm.style.display = 'none';
+                loginForm.style.display = 'block';
+                document.getElementById('login-password').focus();
                 toast('Account created — sign in to continue', 'success');
-            }, 1200);
+            }, 900);
         } catch (err) {
-            showError(errorEl, err.message);
+            showError(registerError, err.message);
         } finally {
-            btn.disabled = false;
+            setBusy(button, false);
         }
+    });
+
+    ['login-username', 'login-password'].forEach(id => {
+        document.getElementById(id).addEventListener('input', () => hideError(loginError));
+    });
+    ['reg-fullname', 'reg-email', 'reg-username', 'reg-password'].forEach(id => {
+        document.getElementById(id).addEventListener('input', () => hideError(registerError));
     });
 });
